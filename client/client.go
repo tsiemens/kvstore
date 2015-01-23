@@ -13,7 +13,9 @@ func main() {
 		dbg.Enabled = true
 	}
 
-	code, err := api.GetCode(cl.URL, cl.StudentNo)
+	var key [32]byte
+
+	code, err := api.Get(cl.URL, key) // temporary to compile
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
 	} else {

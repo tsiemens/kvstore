@@ -1,7 +1,7 @@
 package api
 
 import (
-	"bytes"
+	//"bytes"
 	"errors"
 	"net"
 	"time"
@@ -13,7 +13,7 @@ var retries = 3
 
 /* Retrieves the value from the server at url,
  * using the kvstore protocol */
-func GetCode(url string, id int) ([]byte, error) {
+func Get(url string, key [32]byte) ([]byte, error) {
 	remoteAddr, err := net.ResolveUDPAddr("udp", url)
 	if err != nil {
 		return nil, err
@@ -32,11 +32,11 @@ func GetCode(url string, id int) ([]byte, error) {
 	}
 	localAddr = con.LocalAddr().(*net.UDPAddr) // localAddr has port set now
 
-	msgToSend := newClientMessage(localAddr, id)
+	msgToSend := newClientMessage(localAddr, CmdGet, key, make([]byte, 0, 0))
 	receiver := &protocolReceiver{
 		Conn:       con,
 		RemoteAddr: remoteAddr,
-		MsgUID:     msgToSend.UID(),
+		MsgUID:     msgToSend.UID,
 	}
 
 	// Try [retries] times to receive a message.
@@ -46,8 +46,8 @@ func GetCode(url string, id int) ([]byte, error) {
 	var secretCode []byte
 	for tries := retries; tries > 0; tries-- {
 		// Send message/resend if timeout occurred
-		con.WriteTo(msgToSend.ToBytes(), remoteAddr)
-		dbg.Printf("Sent: %v\n", msgToSend.ToBytes())
+		con.WriteTo(msgToSend.Bytes(), remoteAddr)
+		dbg.Printf("Sent: %v\n", msgToSend.Bytes())
 		msg, err := receiver.recvMsg(timeout)
 		netErr = err
 		if netErr != nil {
@@ -57,7 +57,7 @@ func GetCode(url string, id int) ([]byte, error) {
 				break // Some other error occured, which we won't recover from
 			}
 		} else {
-			secretCode = msg.Code
+			secretCode = msg.Value
 			break
 		}
 	}
@@ -85,7 +85,7 @@ func getMyIP() (net.IP, error) {
 type protocolReceiver struct {
 	Conn       *net.UDPConn
 	RemoteAddr *net.UDPAddr
-	MsgUID     []byte
+	MsgUID     [16]byte
 }
 
 // Attempts to receive the datagram, which must come from the correct ip/port,
@@ -109,7 +109,7 @@ func (self *protocolReceiver) recvMsg(timeoutms int) (*ServerMessage, net.Error)
 
 			dbg.Printf("Received [% x]\n", buff[0:60])
 			serverMsg, err := parseServerMessage(buff[0:n])
-			if err == nil && bytes.Equal(serverMsg.UID, self.MsgUID) {
+			if err == nil && serverMsg.UID == self.MsgUID {
 				return serverMsg, nil
 			}
 			// Ignore malformatted messages, or ones not for our message
