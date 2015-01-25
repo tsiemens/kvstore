@@ -1,19 +1,33 @@
 package api
 
 import (
-	//"bytes"
 	"errors"
 	"net"
 	"time"
 )
-import "github.com/tsiemens/kvstore/shared/dbg"
+import "github.com/tsiemens/kvstore/shared/log"
 
 var initialTimeout = 100
 var retries = 3
 
+type clientMessageBuilder func(addr *net.UDPAddr) *ClientMessage
+
 /* Retrieves the value from the server at url,
  * using the kvstore protocol */
 func Get(url string, key [32]byte) ([]byte, error) {
+	return send(url, func(addr *net.UDPAddr) *ClientMessage {
+		return newClientMessage(addr, CmdGet, key, make([]byte, 0, 0))
+	})
+}
+
+func Put(url string, key [32]byte, value []byte) error {
+	_, err := send(url, func(addr *net.UDPAddr) *ClientMessage {
+		return newClientMessage(addr, CmdPut, key, value)
+	})
+	return err
+}
+
+func send(url string, buildMsg clientMessageBuilder) ([]byte, error) {
 	remoteAddr, err := net.ResolveUDPAddr("udp", url)
 	if err != nil {
 		return nil, err
@@ -32,7 +46,7 @@ func Get(url string, key [32]byte) ([]byte, error) {
 	}
 	localAddr = con.LocalAddr().(*net.UDPAddr) // localAddr has port set now
 
-	msgToSend := newClientMessage(localAddr, CmdGet, key, make([]byte, 0, 0))
+	msgToSend := buildMsg(localAddr)
 	receiver := &protocolReceiver{
 		Conn:       con,
 		RemoteAddr: remoteAddr,
@@ -43,11 +57,11 @@ func Get(url string, key [32]byte) ([]byte, error) {
 	// Timeout at [initialTimeout] ms, doubling the timeout after each retry
 	timeout := initialTimeout
 	var netErr net.Error
-	var secretCode []byte
+	var value []byte
 	for tries := retries; tries > 0; tries-- {
 		// Send message/resend if timeout occurred
 		con.WriteTo(msgToSend.Bytes(), remoteAddr)
-		dbg.Printf("Sent: %v\n", msgToSend.Bytes())
+		log.D.Printf("Sent: %v\n", msgToSend.Bytes())
 		msg, err := receiver.recvMsg(timeout)
 		netErr = err
 		if netErr != nil {
@@ -57,13 +71,13 @@ func Get(url string, key [32]byte) ([]byte, error) {
 				break // Some other error occured, which we won't recover from
 			}
 		} else {
-			secretCode = msg.Value
+			value = msg.Value
 			break
 		}
 	}
 
 	con.Close()
-	return secretCode, netErr
+	return value, netErr
 }
 
 func getMyIP() (net.IP, error) {
@@ -107,7 +121,7 @@ func (self *protocolReceiver) recvMsg(timeoutms int) (*ServerMessage, net.Error)
 		} else if recvAddr.IP.Equal(self.RemoteAddr.IP) &&
 			recvAddr.Port == self.RemoteAddr.Port {
 
-			dbg.Printf("Received [% x]\n", buff[0:60])
+			log.D.Printf("Received [% x]\n", buff[0:60])
 			serverMsg, err := parseServerMessage(buff[0:n])
 			if err == nil && serverMsg.UID == self.MsgUID {
 				return serverMsg, nil

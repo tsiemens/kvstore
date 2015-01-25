@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"math/rand"
 	"net"
 	"time"
 )
+
+import "github.com/tsiemens/kvstore/shared/log"
 
 var myRand = rand.New(rand.NewSource(makeTimestamp()))
 
@@ -44,7 +45,7 @@ func newUID(addr *net.UDPAddr) [16]byte {
 		binary.Write(buf, binary.LittleEndian, int16(addr.Port)) != nil ||
 		binary.Write(buf, binary.LittleEndian, int16(myRand.Int())) != nil ||
 		binary.Write(buf, binary.LittleEndian, makeTimestamp()) != nil {
-		fmt.Println("Error: binary.Write failed!")
+		log.E.Panic("binary.Write failed!")
 	}
 	return byteArray16(buf.Bytes())
 }
