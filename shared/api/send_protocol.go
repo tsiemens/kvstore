@@ -1,11 +1,13 @@
 package api
 
 import (
-	"errors"
 	"net"
 	"time"
 )
 import "github.com/tsiemens/kvstore/shared/log"
+import "github.com/tsiemens/kvstore/shared/util"
+
+const MaxMessageSize = 15000
 
 var initialTimeout = 100
 var retries = 3
@@ -33,18 +35,10 @@ func send(url string, buildMsg clientMessageBuilder) ([]byte, error) {
 		return nil, err
 	}
 
-	// Set up socket
-	myIP, err := getMyIP()
+	con, localAddr, err := util.CreateUDPSocket(remoteAddr.IP.IsLoopback())
 	if err != nil {
 		return nil, err
 	}
-	localAddr := &net.UDPAddr{IP: myIP}
-
-	con, err := net.ListenUDP("udp", localAddr)
-	if err != nil {
-		return nil, err
-	}
-	localAddr = con.LocalAddr().(*net.UDPAddr) // localAddr has port set now
 
 	msgToSend := buildMsg(localAddr)
 	receiver := &protocolReceiver{
@@ -80,22 +74,6 @@ func send(url string, buildMsg clientMessageBuilder) ([]byte, error) {
 	return value, netErr
 }
 
-func getMyIP() (net.IP, error) {
-	addrs, err := net.InterfaceAddrs()
-	if err != nil {
-		return nil, err
-	}
-
-	for _, a := range addrs {
-		if ipnet, ok := a.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-			if ipnet.IP.To4() != nil {
-				return ipnet.IP, nil
-			}
-		}
-	}
-	return nil, errors.New("No IPv4 addresses found")
-}
-
 type protocolReceiver struct {
 	Conn       *net.UDPConn
 	RemoteAddr *net.UDPAddr
@@ -106,18 +84,21 @@ type protocolReceiver struct {
 // must be formatted correctly, and have the same UID originally sent.
 // If timeout occurs, error returned will have .Timeout() == true
 func (self *protocolReceiver) recvMsg(timeoutms int) (*ServerMessage, net.Error) {
-	buff := make([]byte, 16000)
+	buff := make([]byte, MaxMessageSize)
 	for timeRemaining := timeoutms; timeRemaining > 0; {
 
 		self.Conn.SetReadDeadline(
 			time.Now().Add(time.Duration(timeRemaining) * time.Millisecond))
 
 		startTime := time.Now()
-		n, recvAddr, netErr := self.Conn.ReadFromUDP(buff)
+		n, recvAddr, err := self.Conn.ReadFromUDP(buff)
 		timeTaken := time.Since(startTime).Nanoseconds() / 1000000
 
-		if netErr != nil {
-			return nil, netErr.(net.Error)
+		if err != nil {
+			if netErr, ok := err.(net.Error); ok {
+				return nil, netErr
+			}
+			log.E.Println(err)
 		} else if recvAddr.IP.Equal(self.RemoteAddr.IP) &&
 			recvAddr.Port == self.RemoteAddr.Port {
 
