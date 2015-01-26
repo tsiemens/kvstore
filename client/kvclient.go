@@ -52,7 +52,7 @@ func getCommandLine() *KVStoreCommandLine {
 
 	cmd, err := commands.New(args[0])
 	if err != nil {
-		log.E.Println(err)
+		log.E.Fatal(err)
 	}
 
 	return &KVStoreCommandLine{

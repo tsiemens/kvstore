@@ -2,6 +2,7 @@ package util
 
 import "errors"
 import "net"
+import "time"
 
 func CreateUDPSocket(loopback bool) (*net.UDPConn, *net.UDPAddr, error) {
 	myIP, err := GetMyIP(loopback)
@@ -33,4 +34,8 @@ func GetMyIP(loopback bool) (net.IP, error) {
 		}
 	}
 	return nil, errors.New("No IPv4 addresses found")
+}
+
+func UnixMilliTimestamp() int64 {
+	return time.Now().UnixNano() / int64(time.Millisecond)
 }

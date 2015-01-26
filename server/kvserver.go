@@ -6,6 +6,7 @@ import "io/ioutil"
 
 import "github.com/tsiemens/kvstore/shared/log"
 import "github.com/tsiemens/kvstore/server/handler"
+import "github.com/tsiemens/kvstore/server/store"
 
 func main() {
 	log.Init(ioutil.Discard, os.Stdout, os.Stderr)
@@ -14,7 +15,9 @@ func main() {
 		log.Init(os.Stdout, os.Stdout, os.Stderr)
 	}
 
-	exit, conn, localAddr, err := handler.StartHandler(cl.UseLoopback)
+	store := store.New()
+	msgHandler := handler.New(store, cl.PacketLossPct)
+	exit, conn, localAddr, err := msgHandler.Start(cl.UseLoopback)
 	if err != nil {
 		log.E.Panic(err)
 	}
@@ -24,8 +27,9 @@ func main() {
 }
 
 type ServerCommandLine struct {
-	Debug       bool
-	UseLoopback bool
+	Debug         bool
+	UseLoopback   bool
+	PacketLossPct int
 }
 
 func getCommandLine() *ServerCommandLine {
@@ -37,6 +41,7 @@ func getCommandLine() *ServerCommandLine {
 	hPtr := flag.Bool("h", false, "Show help text")
 	helpPtr := flag.Bool("help", false, "Show help text")
 	loopbackPtr := flag.Bool("loopback", false, "Host the server on localhost")
+	packetLossPtr := flag.Int("lossy", 0, "This percent of packets will be randomly dropped.")
 
 	flag.Parse()
 
@@ -46,8 +51,9 @@ func getCommandLine() *ServerCommandLine {
 	}
 
 	return &ServerCommandLine{
-		Debug:       *debugPtr,
-		UseLoopback: *loopbackPtr,
+		Debug:         *debugPtr,
+		UseLoopback:   *loopbackPtr,
+		PacketLossPct: *packetLossPtr,
 	}
 }
 

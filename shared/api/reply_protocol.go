@@ -1,9 +1,11 @@
 package api
 
-import "github.com/tsiemens/kvstore/shared/log"
 import "net"
+import "github.com/tsiemens/kvstore/shared/log"
 
-type ClientMessageHandler func(msg *ClientMessage, recvAddr *net.UDPAddr)
+type ClientMessageHandler interface {
+	HandleClientMessage(msg *ClientMessage, recvAddr *net.UDPAddr)
+}
 
 func LoopReceiver(conn *net.UDPConn, handler ClientMessageHandler, exit chan bool) {
 	for {
@@ -15,7 +17,7 @@ func LoopReceiver(conn *net.UDPConn, handler ClientMessageHandler, exit chan boo
 				return
 			}
 		} else {
-			go handler(msg, recvAddr)
+			go handler.HandleClientMessage(msg, recvAddr)
 		}
 	}
 }
@@ -40,4 +42,54 @@ func recvFromClient(conn *net.UDPConn) (*ClientMessage, *net.UDPAddr, net.Error)
 			}
 		}
 	}
+}
+
+func reply(conn *net.UDPConn, clientAddr *net.UDPAddr,
+	uid [16]byte, respCode byte, value []byte) {
+
+	reply := newServerMessage(uid, respCode, value)
+	conn.WriteTo(reply.Bytes(), clientAddr)
+	log.D.Printf("Sent: [% x]\n", reply.Bytes())
+}
+
+func ReplyToGet(conn *net.UDPConn, clientAddr *net.UDPAddr,
+	clientMsg *ClientMessage, value []byte) {
+	var respCode byte
+	if value != nil {
+		respCode = RespOk
+	} else {
+		respCode = RespInvalidKey
+	}
+	reply(conn, clientAddr, clientMsg.UID, respCode, value)
+}
+
+func ReplyToPut(conn *net.UDPConn, clientAddr *net.UDPAddr,
+	clientMsg *ClientMessage, success bool) {
+	var respCode byte
+	if success {
+		respCode = RespOk
+	} else {
+		respCode = RespInternalError
+	}
+	reply(conn, clientAddr, clientMsg.UID, respCode, nil)
+}
+
+func ReplyToRemove(conn *net.UDPConn, clientAddr *net.UDPAddr,
+	clientMsg *ClientMessage, success bool) {
+	var respCode byte
+	if success {
+		respCode = RespOk
+	} else {
+		respCode = RespInvalidKey
+	}
+	reply(conn, clientAddr, clientMsg.UID, respCode, nil)
+}
+
+func ReplyToUnknownCommand(conn *net.UDPConn, clientAddr *net.UDPAddr,
+	clientMsg *ClientMessage) {
+	reply(conn, clientAddr, clientMsg.UID, RespUnknownCommand, nil)
+}
+
+func Debug_ReplyWithBadUID(conn *net.UDPConn, clientAddr *net.UDPAddr) {
+	reply(conn, clientAddr, [16]byte{}, RespOk, nil)
 }

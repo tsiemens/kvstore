@@ -9,11 +9,14 @@ func New(cmdstr string) (cmd Command, err error) {
 	switch cmdstr {
 	case "get":
 		cmd = newGetCommand()
-		return
+	case "put":
+		cmd = newPutCommand()
+	case "remove":
+		cmd = newRemoveCommand()
 	default:
 		err = errors.New("Unknown command \"" + cmdstr + "\"")
-		return
 	}
+	return
 }
 
 type Command interface {
@@ -68,6 +71,7 @@ func (c *GetCommand) Run(url string, args []string) error {
 		return err
 	}
 
+	log.Out.Println("Retreived:")
 	log.Out.Println(string(val))
 	return nil
 }
@@ -112,6 +116,37 @@ func (c *PutCommand) Run(url string, args []string) error {
 	}
 
 	log.Out.Printf("Set value of %x to %s\n", key, value)
+	return nil
+}
+
+type RemoveCommand struct {
+	BaseCommand
+}
+
+func newRemoveCommand() *RemoveCommand {
+	return &RemoveCommand{BaseCommand{
+		name: "remove",
+		desc: "Deletes the value for a key.",
+		args: []string{"KEY (32 bytes, in hexadecimal)"},
+	}}
+}
+
+func (c *RemoveCommand) Run(url string, args []string) error {
+	if len(args) == 0 {
+		return errors.New("remove requires KEY argument")
+	}
+
+	key, err := keyFromHex(args[0])
+	if err != nil {
+		return err
+	}
+
+	err = api.Remove(url, key)
+	if err != nil {
+		return err
+	}
+
+	log.Out.Printf("Deleted %x\n", key)
 	return nil
 }
 

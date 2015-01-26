@@ -20,6 +20,9 @@ type ServerMessage struct {
 }
 
 func newServerMessage(reqUID [16]byte, respCode byte, value []byte) *ServerMessage {
+	if value == nil {
+		value = make([]byte, 0)
+	}
 	return &ServerMessage{
 		UID:          reqUID,
 		ResponseCode: respCode,
@@ -40,6 +43,25 @@ func (msg *ServerMessage) Payload() []byte {
 // Server message is of form [request uid [16]byte | payload ]
 func (msg *ServerMessage) Bytes() []byte {
 	return append(msg.UID[:], msg.Payload()...)
+}
+
+func (msg *ServerMessage) Error() error {
+	switch msg.ResponseCode {
+	case RespOk:
+		return nil
+	case RespInvalidKey:
+		return errors.New("Non-existent key requested")
+	case RespOutOfSpace:
+		return errors.New("Server out of space")
+	case RespSysOverload:
+		return errors.New("System overload")
+	case RespInternalError:
+		return errors.New("Internal KVStore failure")
+	case RespUnknownCommand:
+		return errors.New("Unrecognized command")
+	default:
+		return nil
+	}
 }
 
 // Parses a server datagram, and returns a ServerMessage representation

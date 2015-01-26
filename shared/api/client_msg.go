@@ -6,12 +6,12 @@ import (
 	"errors"
 	"math/rand"
 	"net"
-	"time"
 )
 
 import "github.com/tsiemens/kvstore/shared/log"
+import "github.com/tsiemens/kvstore/shared/util"
 
-var myRand = rand.New(rand.NewSource(makeTimestamp()))
+var myRand = rand.New(rand.NewSource(util.UnixMilliTimestamp()))
 
 const CmdPut = 0x01
 const CmdGet = 0x02
@@ -44,7 +44,7 @@ func newUID(addr *net.UDPAddr) [16]byte {
 	if binary.Write(buf, binary.BigEndian, addr.IP.To4()) != nil ||
 		binary.Write(buf, binary.LittleEndian, int16(addr.Port)) != nil ||
 		binary.Write(buf, binary.LittleEndian, int16(myRand.Int())) != nil ||
-		binary.Write(buf, binary.LittleEndian, makeTimestamp()) != nil {
+		binary.Write(buf, binary.LittleEndian, util.UnixMilliTimestamp()) != nil {
 		log.E.Panic("binary.Write failed!")
 	}
 	return byteArray16(buf.Bytes())
@@ -66,10 +66,6 @@ func (msg *ClientMessage) Payload() []byte {
 // Is of form [UID [16]byte |  payload ]
 func (msg *ClientMessage) Bytes() []byte {
 	return append(msg.UID[:], msg.Payload()...)
-}
-
-func makeTimestamp() int64 {
-	return time.Now().UnixNano() / int64(time.Millisecond)
 }
 
 func expectsKeyForCommand(command byte) bool {

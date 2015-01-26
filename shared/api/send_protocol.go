@@ -22,9 +22,20 @@ func Get(url string, key [32]byte) ([]byte, error) {
 	})
 }
 
+/* Sets the value on the server at url,
+ * using the kvstore protocol */
 func Put(url string, key [32]byte, value []byte) error {
 	_, err := send(url, func(addr *net.UDPAddr) *ClientMessage {
 		return newClientMessage(addr, CmdPut, key, value)
+	})
+	return err
+}
+
+/* Removes the value from the server at url,
+ * using the kvstore protocol */
+func Remove(url string, key [32]byte) error {
+	_, err := send(url, func(addr *net.UDPAddr) *ClientMessage {
+		return newClientMessage(addr, CmdRemove, key, make([]byte, 0, 0))
 	})
 	return err
 }
@@ -39,6 +50,7 @@ func send(url string, buildMsg clientMessageBuilder) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer con.Close()
 
 	msgToSend := buildMsg(localAddr)
 	receiver := &protocolReceiver{
@@ -51,27 +63,28 @@ func send(url string, buildMsg clientMessageBuilder) ([]byte, error) {
 	// Timeout at [initialTimeout] ms, doubling the timeout after each retry
 	timeout := initialTimeout
 	var netErr net.Error
-	var value []byte
 	for tries := retries; tries > 0; tries-- {
 		// Send message/resend if timeout occurred
 		con.WriteTo(msgToSend.Bytes(), remoteAddr)
-		log.D.Printf("Sent: %v\n", msgToSend.Bytes())
+		log.D.Printf("Sent: [% x]\n", msgToSend.Bytes())
 		msg, err := receiver.recvMsg(timeout)
 		netErr = err
 		if netErr != nil {
 			if netErr.Timeout() {
 				timeout *= 2
 			} else {
-				break // Some other error occured, which we won't recover from
+				// Some other error occured, which we won't recover from
+				return nil, netErr
 			}
+		} else if msgErr := msg.Error(); msgErr != nil {
+			return nil, msgErr
 		} else {
-			value = msg.Value
-			break
+			return msg.Value, nil
 		}
 	}
 
-	con.Close()
-	return value, netErr
+	// Timeout has occurred
+	return nil, netErr
 }
 
 type protocolReceiver struct {
@@ -108,6 +121,7 @@ func (self *protocolReceiver) recvMsg(timeoutms int) (*ServerMessage, net.Error)
 				return serverMsg, nil
 			}
 			// Ignore malformatted messages, or ones not for our message
+			log.D.Printf("Ignoring malformed message: %v", err)
 		}
 
 		timeRemaining -= int(timeTaken)
