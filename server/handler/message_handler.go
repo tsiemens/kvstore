@@ -15,25 +15,20 @@ type MessageHandler struct {
 	random            *rand.Rand
 }
 
-func New(store *store.Store, lossPercent int) *MessageHandler {
+func New(store *store.Store, conn *net.UDPConn, lossPercent int) *MessageHandler {
 	random := rand.New(rand.NewSource(util.UnixMilliTimestamp()))
 	return &MessageHandler{
 		store:             store,
+		conn:              conn,
 		PacketLossPercent: lossPercent % 101,
 		random:            random,
 	}
 }
 
-func (handler *MessageHandler) Start(loopback bool) (chan bool, *net.UDPConn, *net.UDPAddr, error) {
-	con, localAddr, err := util.CreateUDPSocket(loopback)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	handler.conn = con
-
-	exit := make(chan bool)
-	go api.LoopReceiver(con, handler, exit)
-	return exit, con, localAddr, nil
+func (handler *MessageHandler) Start() (exit chan bool) {
+	exit = make(chan bool)
+	go api.LoopReceiver(handler.conn, handler, exit)
+	return exit
 }
 
 func (handler *MessageHandler) isPacketLost() bool {

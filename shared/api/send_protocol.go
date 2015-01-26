@@ -46,7 +46,7 @@ func send(url string, buildMsg clientMessageBuilder) ([]byte, error) {
 		return nil, err
 	}
 
-	con, localAddr, err := util.CreateUDPSocket(remoteAddr.IP.IsLoopback())
+	con, localAddr, err := util.CreateUDPSocket(remoteAddr.IP.IsLoopback(), 0)
 	if err != nil {
 		return nil, err
 	}

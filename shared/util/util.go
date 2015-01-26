@@ -4,13 +4,15 @@ import "errors"
 import "net"
 import "time"
 
-func CreateUDPSocket(loopback bool) (*net.UDPConn, *net.UDPAddr, error) {
+// Makes a new UDP socket on the primary network connection
+// If port is 0, it will select one automatically
+// If loopback is true, the socket will use localhost as its IP
+func CreateUDPSocket(loopback bool, port int) (*net.UDPConn, *net.UDPAddr, error) {
 	myIP, err := GetMyIP(loopback)
 	if err != nil {
 		return nil, nil, err
 	}
-	localAddr := &net.UDPAddr{IP: myIP}
-	//localAddr := &net.UDPAddr{IP: myIP}
+	localAddr := &net.UDPAddr{IP: myIP, Port: port}
 
 	con, err := net.ListenUDP("udp", localAddr)
 	if err != nil {
