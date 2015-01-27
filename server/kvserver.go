@@ -4,6 +4,7 @@ import "flag"
 import "os"
 import "io/ioutil"
 
+import "github.com/tsiemens/kvstore/shared/api"
 import "github.com/tsiemens/kvstore/shared/log"
 import "github.com/tsiemens/kvstore/shared/util"
 import "github.com/tsiemens/kvstore/server/handler"
@@ -22,11 +23,11 @@ func main() {
 		log.E.Panic(err)
 	}
 	defer conn.Close()
+	log.Out.Printf("Started server on %s", localAddr.String())
 
 	msgHandler := handler.New(store, conn, cl.PacketLossPct)
-	exit := msgHandler.Start()
-	log.Out.Printf("Started server on %s", localAddr.String())
-	<-exit
+	err = api.LoopReceiver(conn, msgHandler)
+	log.E.Fatal(err)
 }
 
 type ServerCommandLine struct {

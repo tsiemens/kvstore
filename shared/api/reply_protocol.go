@@ -7,14 +7,13 @@ type ClientMessageHandler interface {
 	HandleClientMessage(msg *ClientMessage, recvAddr *net.UDPAddr)
 }
 
-func LoopReceiver(conn *net.UDPConn, handler ClientMessageHandler, exit chan bool) {
+func LoopReceiver(conn *net.UDPConn, handler ClientMessageHandler) error {
 	for {
 		msg, recvAddr, err := recvFromClient(conn)
 		if err != nil {
 			log.E.Println(err)
 			if !err.Temporary() {
-				exit <- true
-				return
+				return err
 			}
 		} else {
 			go handler.HandleClientMessage(msg, recvAddr)

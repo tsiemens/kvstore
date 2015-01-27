@@ -25,12 +25,6 @@ func New(store *store.Store, conn *net.UDPConn, lossPercent int) *MessageHandler
 	}
 }
 
-func (handler *MessageHandler) Start() (exit chan bool) {
-	exit = make(chan bool)
-	go api.LoopReceiver(handler.conn, handler, exit)
-	return exit
-}
-
 func (handler *MessageHandler) isPacketLost() bool {
 	return handler.random.Int()%100 < handler.PacketLossPercent
 }
