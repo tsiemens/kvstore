@@ -13,6 +13,8 @@ func New(cmdstr string) (cmd Command, err error) {
 		cmd = newPutCommand()
 	case "remove":
 		cmd = newRemoveCommand()
+	case "status":
+		cmd = newStatusUpdateCommand()
 	default:
 		err = errors.New("Unknown command \"" + cmdstr + "\"")
 	}
@@ -161,4 +163,37 @@ func printCommandHelp(cmd Command) {
 	for _, arg := range cmd.Args() {
 		log.Out.Printf("		%s\n", arg)
 	}
+}
+
+type StatusUpdateCommand struct {
+	BaseCommand
+}
+
+func newStatusUpdateCommand() *StatusUpdateCommand {
+	return &StatusUpdateCommand{BaseCommand{
+		name: "status update",
+		desc: "Sends a script to a node.",
+		args: []string{"KEY (32 bytes, in hexadecimal)",
+			"VALUE (bash script)"},
+	}}
+}
+
+func (c *StatusUpdateCommand) Run(url string, args []string) error {
+	if len(args) < 2 {
+		return errors.New("status update requires KEY and VALUE arguments")
+	}
+
+	key, err := keyFromHex(args[0])
+	if err != nil {
+		return err
+	}
+
+	value := args[1]
+	err = api.StatusUpdate(url, key, []byte(value))
+	if err != nil {
+		return err
+	}
+
+	//log.Out.Printf("Set value of %x to %s\n", key, value)
+	return nil
 }

@@ -9,9 +9,12 @@ import "github.com/tsiemens/kvstore/shared/log"
 import "github.com/tsiemens/kvstore/shared/util"
 import "github.com/tsiemens/kvstore/server/handler"
 import "github.com/tsiemens/kvstore/server/store"
+import "github.com/tsiemens/kvstore/server/config"
 
 func main() {
 	log.Init(ioutil.Discard, os.Stdout, os.Stderr)
+	config.Init()
+
 	cl := getCommandLine()
 	if cl.Debug {
 		log.Init(os.Stdout, os.Stdout, os.Stderr)

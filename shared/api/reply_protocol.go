@@ -3,25 +3,26 @@ package api
 import "net"
 import "github.com/tsiemens/kvstore/shared/log"
 
-type ClientMessageHandler interface {
-	HandleClientMessage(msg *ClientMessage, recvAddr *net.UDPAddr)
+type RequestMessageHandler interface {
+	HandleRequestMessage(msg *RequestMessage, recvAddr *net.UDPAddr)
 }
 
-func LoopReceiver(conn *net.UDPConn, handler ClientMessageHandler) error {
+func LoopReceiver(conn *net.UDPConn, handler RequestMessageHandler) error {
 	for {
-		msg, recvAddr, err := recvFromClient(conn)
+		msg, recvAddr, err := recvFrom(conn)
 		if err != nil {
 			log.E.Println(err)
 			if !err.Temporary() {
 				return err
 			}
 		} else {
-			go handler.HandleClientMessage(msg, recvAddr)
+			log.D.Println("Received message from", recvAddr)
+			go handler.HandleRequestMessage(msg, recvAddr)
 		}
 	}
 }
 
-func recvFromClient(conn *net.UDPConn) (*ClientMessage, *net.UDPAddr, net.Error) {
+func recvFrom(conn *net.UDPConn) (*RequestMessage, *net.UDPAddr, net.Error) {
 	buff := make([]byte, MaxMessageSize)
 
 	for {
@@ -33,62 +34,79 @@ func recvFromClient(conn *net.UDPConn) (*ClientMessage, *net.UDPAddr, net.Error)
 			log.E.Println(err)
 		} else {
 			log.D.Printf("Received [% x]\n", buff[0:60])
-			clientMsg, err := parseClientMessage(buff[0:n])
+			requestMsg, err := parseRequestMessage(buff[0:n])
 			if err != nil {
 				log.E.Println(err)
 			} else {
-				return clientMsg, recvAddr, nil
+				return requestMsg, recvAddr, nil
 			}
 		}
 	}
 }
 
-func reply(conn *net.UDPConn, clientAddr *net.UDPAddr,
+func reply(conn *net.UDPConn, recvAddr *net.UDPAddr,
 	uid [16]byte, respCode byte, value []byte) {
 
-	reply := newServerMessage(uid, respCode, value)
-	conn.WriteTo(reply.Bytes(), clientAddr)
+	reply := newResponseMessage(uid, respCode, value)
+	conn.WriteTo(reply.Bytes(), recvAddr)
 	log.D.Printf("Sent: [% x]\n", reply.Bytes())
 }
 
-func ReplyToGet(conn *net.UDPConn, clientAddr *net.UDPAddr,
-	clientMsg *ClientMessage, value []byte) {
+func ReplyToGet(conn *net.UDPConn, recvAddr *net.UDPAddr,
+	requestMsg *RequestMessage, value []byte) {
 	var respCode byte
 	if value != nil {
 		respCode = RespOk
 	} else {
 		respCode = RespInvalidKey
 	}
-	reply(conn, clientAddr, clientMsg.UID, respCode, value)
+	reply(conn, recvAddr, requestMsg.UID, respCode, value)
 }
 
-func ReplyToPut(conn *net.UDPConn, clientAddr *net.UDPAddr,
-	clientMsg *ClientMessage, success bool) {
+func ReplyToPut(conn *net.UDPConn, recvAddr *net.UDPAddr,
+	requestMsg *RequestMessage, success bool) {
 	var respCode byte
 	if success {
 		respCode = RespOk
 	} else {
 		respCode = RespInternalError
 	}
-	reply(conn, clientAddr, clientMsg.UID, respCode, nil)
+	reply(conn, recvAddr, requestMsg.UID, respCode, nil)
 }
 
-func ReplyToRemove(conn *net.UDPConn, clientAddr *net.UDPAddr,
-	clientMsg *ClientMessage, success bool) {
+func ReplyToRemove(conn *net.UDPConn, recvAddr *net.UDPAddr,
+	requestMsg *RequestMessage, success bool) {
 	var respCode byte
 	if success {
 		respCode = RespOk
 	} else {
 		respCode = RespInvalidKey
 	}
-	reply(conn, clientAddr, clientMsg.UID, respCode, nil)
+	reply(conn, recvAddr, requestMsg.UID, respCode, nil)
 }
 
-func ReplyToUnknownCommand(conn *net.UDPConn, clientAddr *net.UDPAddr,
-	clientMsg *ClientMessage) {
-	reply(conn, clientAddr, clientMsg.UID, RespUnknownCommand, nil)
+func ReplyToStatusUpdateServer(conn *net.UDPConn, recvAddr *net.UDPAddr,
+	requestMsg *RequestMessage, statusResult []byte, success bool) {
+	var respCode byte
+	if success {
+		respCode = RespOk
+	} else {
+		respCode = RespStatusUpdateFail
+	}
+	//TODO - figure out what to do with UID
+	reply(conn, recvAddr, requestMsg.UID /*this is probably wrong*/, respCode, statusResult)
+
 }
 
-func Debug_ReplyWithBadUID(conn *net.UDPConn, clientAddr *net.UDPAddr) {
-	reply(conn, clientAddr, [16]byte{}, RespOk, nil)
+func NotifyStatusUpdate(conn *net.UDPConn, recvAddr *net.UDPAddr,
+	requestMsg *RequestMessage) {
+}
+
+func ReplyToUnknownCommand(conn *net.UDPConn, recvAddr *net.UDPAddr,
+	requestMsg *RequestMessage) {
+	reply(conn, recvAddr, requestMsg.UID, RespUnknownCommand, nil)
+}
+
+func Debug_ReplyWithBadUID(conn *net.UDPConn, recvAddr *net.UDPAddr) {
+	reply(conn, recvAddr, [16]byte{}, RespOk, nil)
 }

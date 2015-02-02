@@ -12,21 +12,21 @@ const MaxMessageSize = 15000
 var initialTimeout = 100
 var retries = 3
 
-type clientMessageBuilder func(addr *net.UDPAddr) *ClientMessage
+type requestMessageBuilder func(addr *net.UDPAddr) *RequestMessage
 
 /* Retrieves the value from the server at url,
  * using the kvstore protocol */
 func Get(url string, key [32]byte) ([]byte, error) {
-	return send(url, func(addr *net.UDPAddr) *ClientMessage {
-		return newClientMessage(addr, CmdGet, key, make([]byte, 0, 0))
+	return send(url, func(addr *net.UDPAddr) *RequestMessage {
+		return newRequestMessage(addr, CmdGet, key, make([]byte, 0, 0))
 	})
 }
 
 /* Sets the value on the server at url,
  * using the kvstore protocol */
 func Put(url string, key [32]byte, value []byte) error {
-	_, err := send(url, func(addr *net.UDPAddr) *ClientMessage {
-		return newClientMessage(addr, CmdPut, key, value)
+	_, err := send(url, func(addr *net.UDPAddr) *RequestMessage {
+		return newRequestMessage(addr, CmdPut, key, value)
 	})
 	return err
 }
@@ -34,13 +34,20 @@ func Put(url string, key [32]byte, value []byte) error {
 /* Removes the value from the server at url,
  * using the kvstore protocol */
 func Remove(url string, key [32]byte) error {
-	_, err := send(url, func(addr *net.UDPAddr) *ClientMessage {
-		return newClientMessage(addr, CmdRemove, key, make([]byte, 0, 0))
+	_, err := send(url, func(addr *net.UDPAddr) *RequestMessage {
+		return newRequestMessage(addr, CmdRemove, key, make([]byte, 0, 0))
 	})
 	return err
 }
 
-func send(url string, buildMsg clientMessageBuilder) ([]byte, error) {
+func StatusUpdate(url string, key [32]byte, value []byte) error {
+	_, err := send(url, func(addr *net.UDPAddr) *RequestMessage {
+		return newRequestMessage(addr, CmdStatusUpdate, key, value)
+	})
+	return err
+}
+
+func send(url string, buildMsg requestMessageBuilder) ([]byte, error) {
 	remoteAddr, err := net.ResolveUDPAddr("udp", url)
 	if err != nil {
 		return nil, err
@@ -96,7 +103,7 @@ type protocolReceiver struct {
 // Attempts to receive the datagram, which must come from the correct ip/port,
 // must be formatted correctly, and have the same UID originally sent.
 // If timeout occurs, error returned will have .Timeout() == true
-func (self *protocolReceiver) recvMsg(timeoutms int) (*ServerMessage, net.Error) {
+func (self *protocolReceiver) recvMsg(timeoutms int) (*ResponseMessage, net.Error) {
 	buff := make([]byte, MaxMessageSize)
 	for timeRemaining := timeoutms; timeRemaining > 0; {
 
@@ -116,7 +123,7 @@ func (self *protocolReceiver) recvMsg(timeoutms int) (*ServerMessage, net.Error)
 			recvAddr.Port == self.RemoteAddr.Port {
 
 			log.D.Printf("Received [% x]\n", buff[0:60])
-			serverMsg, err := parseServerMessage(buff[0:n])
+			serverMsg, err := parseResponseMessage(buff[0:n])
 			if err == nil && serverMsg.UID == self.MsgUID {
 				return serverMsg, nil
 			}

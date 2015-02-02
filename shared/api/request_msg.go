@@ -16,19 +16,20 @@ var myRand = rand.New(rand.NewSource(util.UnixMilliTimestamp()))
 const CmdPut = 0x01
 const CmdGet = 0x02
 const CmdRemove = 0x03
+const CmdStatusUpdate = 0x04
 
-type ClientMessage struct {
+type RequestMessage struct {
 	UID     [16]byte
 	Command byte
 	Key     [32]byte
 	Value   []byte
 }
 
-func newClientMessage(addr *net.UDPAddr, command byte, key [32]byte, value []byte) *ClientMessage {
+func newRequestMessage(addr *net.UDPAddr, command byte, key [32]byte, value []byte) *RequestMessage {
 	if addr == nil {
 		return nil
 	}
-	msg := &ClientMessage{
+	msg := &RequestMessage{
 		UID:     newUID(addr),
 		Command: command,
 		Key:     key,
@@ -53,7 +54,7 @@ func newUID(addr *net.UDPAddr) [16]byte {
 // Returns the payload for this message
 // Is of form [command [1]byte | key [32]byte | (optional) val length int16 |
 //				 value [<=15,000]byte ]
-func (msg *ClientMessage) Payload() []byte {
+func (msg *RequestMessage) Payload() []byte {
 	buf := new(bytes.Buffer)
 	buf.WriteByte(msg.Command)
 	buf.Write(msg.Key[:])
@@ -64,7 +65,7 @@ func (msg *ClientMessage) Payload() []byte {
 
 // Creates a byte/message representation of the message
 // Is of form [UID [16]byte |  payload ]
-func (msg *ClientMessage) Bytes() []byte {
+func (msg *RequestMessage) Bytes() []byte {
 	return append(msg.UID[:], msg.Payload()...)
 }
 
@@ -75,11 +76,11 @@ func expectsKeyForCommand(command byte) bool {
 }
 
 func expectsValueForCommand(command byte) bool {
-	return command == CmdPut
+	return command == CmdPut || command == CmdStatusUpdate
 }
 
-// Parses a client datagram, and returns a ClientMessage representation
-func parseClientMessage(dgram []byte) (*ClientMessage, error) {
+// Parses a request datagram, and returns a RequestMessage representation
+func parseRequestMessage(dgram []byte) (*RequestMessage, error) {
 	if len(dgram) < 17 {
 		return nil, errors.New("Datagram header improperly formatted")
 	}
@@ -92,7 +93,7 @@ func parseClientMessage(dgram []byte) (*ClientMessage, error) {
 		return nil, err
 	}
 
-	clientMsg := &ClientMessage{UID: byteArray16(uid), Command: command}
+	requestMsg := &RequestMessage{UID: byteArray16(uid), Command: command}
 
 	if expectsKeyForCommand(command) {
 		key := make([]byte, 32)
@@ -100,10 +101,10 @@ func parseClientMessage(dgram []byte) (*ClientMessage, error) {
 		if err != nil {
 			return nil, err
 		} else if bytesRead != 32 {
-			return nil, errors.New("Client datagram missing key")
+			return nil, errors.New("Request datagram missing key")
 		}
 
-		clientMsg.Key = byteArray32(key)
+		requestMsg.Key = byteArray32(key)
 
 		if expectsValueForCommand(command) {
 			var valueLen int16
@@ -121,9 +122,9 @@ func parseClientMessage(dgram []byte) (*ClientMessage, error) {
 				return nil, errors.New("Value length mismatch")
 			}
 
-			clientMsg.Value = value[:bytesRead]
+			requestMsg.Value = value[:bytesRead]
 		}
 	}
 
-	return clientMsg, nil
+	return requestMsg, nil
 }

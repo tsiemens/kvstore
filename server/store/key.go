@@ -4,6 +4,15 @@ import "fmt"
 
 type Key [32]byte
 
+func (k *Key) Equals(other Key) bool {
+	for i, _ := range k {
+		if k[i] != other[i] {
+			return false
+		}
+	}
+	return true
+}
+
 func (k *Key) greater(other Key, equals bool) bool {
 	for i, _ := range k {
 		if k[i] > other[i] {
