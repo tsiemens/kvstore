@@ -39,7 +39,6 @@ func (handler *MessageHandler) HandleRequestMessage(msg *api.RequestMessage, rec
 		return
 	}
 	log.D.Println("Handling!")
-	log.D.Println(msg.Command)
 	switch msg.Command {
 	case api.CmdGet:
 		handler.HandleGet(msg, recvAddr)
@@ -88,6 +87,7 @@ func (handler *MessageHandler) HandleStatusUpdate(msg *api.RequestMessage, recvA
 	conf := config.GetConfig()
 	if handler.statusKey.Equals(msg.Key) {
 		// status already reached node
+		log.D.Println("Status already received")
 		if handler.random.Intn(conf.K) == conf.K-1 {
 			handler.shouldGossip = false
 			return

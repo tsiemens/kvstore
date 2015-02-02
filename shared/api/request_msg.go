@@ -72,7 +72,8 @@ func (msg *RequestMessage) Bytes() []byte {
 func expectsKeyForCommand(command byte) bool {
 	return command == CmdGet ||
 		command == CmdPut ||
-		command == CmdRemove
+		command == CmdRemove ||
+		command == CmdStatusUpdate
 }
 
 func expectsValueForCommand(command byte) bool {
@@ -106,24 +107,25 @@ func parseRequestMessage(dgram []byte) (*RequestMessage, error) {
 
 		requestMsg.Key = byteArray32(key)
 
-		if expectsValueForCommand(command) {
-			var valueLen int16
-			err := binary.Read(buf, binary.LittleEndian, &valueLen)
-			if err != nil {
-				return nil, err
-			}
+	}
 
-			value := make([]byte, valueLen)
-			bytesRead, err := buf.Read(value)
-			if err != nil {
-				return nil, err
-			}
-			if bytesRead != int(valueLen) {
-				return nil, errors.New("Value length mismatch")
-			}
-
-			requestMsg.Value = value[:bytesRead]
+	if expectsValueForCommand(command) {
+		var valueLen int16
+		err := binary.Read(buf, binary.LittleEndian, &valueLen)
+		if err != nil {
+			return nil, err
 		}
+
+		value := make([]byte, valueLen)
+		bytesRead, err := buf.Read(value)
+		if err != nil {
+			return nil, err
+		}
+		if bytesRead != int(valueLen) {
+			return nil, errors.New("Value length mismatch")
+		}
+
+		requestMsg.Value = value[:bytesRead]
 	}
 
 	return requestMsg, nil

@@ -6,13 +6,14 @@ import (
 	"os"
 )
 
+// This package manages the server configuration
+
 var config *Config
 
 type Config struct {
-	ShouldRelay      bool
-	NotifyCount      int
-	K                int
-	NodeAddrMap      map[string]*net.UDPAddr
+	NotifyCount      int                     // number of nodes notified using the gossip protocol
+	K                int                     // K factor in gossip protocol
+	NodeAddrMap      map[string]*net.UDPAddr // temp - need some sort of structure to store all nodes
 	StatusServerAddr *net.UDPAddr
 }
 
@@ -24,7 +25,6 @@ func Init() {
 		os.Exit(1)
 	}
 	config = &Config{
-		ShouldRelay:      true,
 		NotifyCount:      2,
 		K:                8,
 		StatusServerAddr: addr,
