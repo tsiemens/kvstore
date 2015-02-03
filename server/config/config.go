@@ -33,7 +33,7 @@ func Init() {
 
 func GetRandAddr() *net.UDPAddr {
 	//TODO return addr of random peer in network
-	addr, _ := net.ResolveUDPAddr("udp", ":5066")
+	addr, _ := net.ResolveUDPAddr("udp", ":5067")
 	return addr
 }
 

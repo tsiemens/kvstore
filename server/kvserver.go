@@ -28,8 +28,13 @@ func main() {
 	defer conn.Close()
 	log.Out.Printf("Started server on %s", localAddr.String())
 
-	msgHandler := handler.New(store, conn, cl.PacketLossPct)
-	err = api.LoopReceiver(conn, msgHandler)
+	if cl.StatusServer {
+		statusHandler := handler.NewStatusHandler()
+		err = api.StatusReceiver(conn, statusHandler)
+	} else {
+		msgHandler := handler.NewMessageHandler(store, conn, cl.PacketLossPct)
+		err = api.LoopReceiver(conn, msgHandler)
+	}
 	log.E.Fatal(err)
 }
 
@@ -38,6 +43,7 @@ type ServerCommandLine struct {
 	UseLoopback   bool
 	PacketLossPct int
 	Port          int
+	StatusServer  bool
 }
 
 func getCommandLine() *ServerCommandLine {
@@ -52,6 +58,7 @@ func getCommandLine() *ServerCommandLine {
 	portPtr := flag.Int("port", 0, "Port to run server on.")
 	packetLossPtr := flag.Int("lossy", 0, "This percent of packets will be randomly dropped.")
 
+	statusServerPtr := flag.Bool("statsrv", false, "Use this node as a status server")
 	flag.Parse()
 
 	if *helpPtr || *hPtr {
@@ -64,6 +71,7 @@ func getCommandLine() *ServerCommandLine {
 		UseLoopback:   *loopbackPtr,
 		PacketLossPct: *packetLossPtr,
 		Port:          *portPtr,
+		StatusServer:  *statusServerPtr,
 	}
 }
 

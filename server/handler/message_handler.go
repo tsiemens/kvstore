@@ -18,7 +18,7 @@ type MessageHandler struct {
 	shouldGossip      bool
 }
 
-func New(store *store.Store, conn *net.UDPConn, lossPercent int) *MessageHandler {
+func NewMessageHandler(store *store.Store, conn *net.UDPConn, lossPercent int) *MessageHandler {
 	random := rand.New(rand.NewSource(util.UnixMilliTimestamp()))
 	return &MessageHandler{
 		store:             store,
