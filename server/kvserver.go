@@ -13,12 +13,12 @@ import "github.com/tsiemens/kvstore/server/config"
 
 func main() {
 	log.Init(ioutil.Discard, os.Stdout, os.Stderr)
-	config.Init()
 
 	cl := getCommandLine()
 	if cl.Debug {
 		log.Init(os.Stdout, os.Stdout, os.Stderr)
 	}
+	config.Init(cl.ConfigPath)
 
 	store := store.New()
 	conn, localAddr, err := util.CreateUDPSocket(cl.UseLoopback, cl.Port)
@@ -44,6 +44,7 @@ type ServerCommandLine struct {
 	PacketLossPct int
 	Port          int
 	StatusServer  bool
+	ConfigPath    string
 }
 
 func getCommandLine() *ServerCommandLine {
@@ -57,6 +58,7 @@ func getCommandLine() *ServerCommandLine {
 	loopbackPtr := flag.Bool("loopback", false, "Host the server on localhost")
 	portPtr := flag.Int("port", 0, "Port to run server on.")
 	packetLossPtr := flag.Int("lossy", 0, "This percent of packets will be randomly dropped.")
+	configPathPtr := flag.String("config", "config.json", "Path to the config file")
 
 	statusServerPtr := flag.Bool("statsrv", false, "Use this node as a status server")
 	flag.Parse()
@@ -72,6 +74,7 @@ func getCommandLine() *ServerCommandLine {
 		PacketLossPct: *packetLossPtr,
 		Port:          *portPtr,
 		StatusServer:  *statusServerPtr,
+		ConfigPath:    *configPathPtr,
 	}
 }
 

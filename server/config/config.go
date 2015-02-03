@@ -1,7 +1,9 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
+	"github.com/tsiemens/kvstore/shared/log"
 	"net"
 	"os"
 )
@@ -17,18 +19,32 @@ type Config struct {
 	StatusServerAddr *net.UDPAddr
 }
 
-func Init() {
-	//TODO implement this properly
-	addr, err := net.ResolveUDPAddr("udp", ":5066")
+func Init(configPath string) {
+
+	// Check if configPath is valid
+	if ok, err := exists(configPath); !ok {
+		if err == nil {
+			log.E.Println("Configuration file not found. Please pass in the correct path in the command line arguments")
+			os.Exit(1)
+		} else {
+			log.E.Println(err)
+		}
+	}
+
+	// decode and unmarshal
+	file, err := os.Open(configPath)
 	if err != nil {
-		fmt.Println("Error:", err)
+		log.E.Println(err)
 		os.Exit(1)
 	}
-	config = &Config{
-		NotifyCount:      2,
-		K:                8,
-		StatusServerAddr: addr,
+	decoder := json.NewDecoder(file)
+	config = &Config{}
+	err = decoder.Decode(config)
+	if err != nil {
+		log.E.Println(err)
 	}
+
+	fmt.Println(config)
 }
 
 func GetRandAddr() *net.UDPAddr {
@@ -39,4 +55,17 @@ func GetRandAddr() *net.UDPAddr {
 
 func GetConfig() *Config {
 	return config
+}
+
+// Taken from github: http://stackoverflow.com/questions/10510691/how-to-check-whether-a-file-or-directory-denoted-by-a-path-exists-in-golang
+// exists returns whether the given file or directory exists or not
+func exists(path string) (bool, error) {
+	_, err := os.Stat(path)
+	if err == nil {
+		return true, nil
+	}
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	return false, err
 }
