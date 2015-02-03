@@ -6,6 +6,7 @@ import "math/rand"
 import "github.com/tsiemens/kvstore/shared/util"
 import "github.com/tsiemens/kvstore/shared/api"
 import "github.com/tsiemens/kvstore/shared/log"
+import "github.com/tsiemens/kvstore/shared/exec"
 import "github.com/tsiemens/kvstore/server/store"
 import "github.com/tsiemens/kvstore/server/config"
 
@@ -95,8 +96,9 @@ func (handler *MessageHandler) HandleStatusUpdate(msg *api.RequestMessage, recvA
 	} else {
 		handler.shouldGossip = true
 		handler.statusKey = msg.Key
-		status, success := handler.ExecuteStatusUpdate(msg)
-		api.ReplyToStatusUpdateServer(handler.conn, conf.StatusServerAddr, msg, status, success)
+		success, status := exec.RunCommand(string(msg.Value))
+		log.I.Println(status)
+		api.ReplyToStatusUpdateServer(handler.conn, conf.StatusServerAddr, msg, []byte(status), success)
 	}
 
 	if handler.shouldGossip {

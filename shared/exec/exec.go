@@ -7,31 +7,32 @@ import "os/exec"
 
 var waitGroup sync.WaitGroup
 
-func runCommand(command string) string {
+func RunCommand(command string) (bool, string) {
 	//var waitGroup sync.WaitGroup
 	waitGroup.Add(1)
 	return execute(command, &waitGroup)
 }
 
-func getDiskSpace() string {
+func getDiskSpace() (bool, string) {
 	waitGroup.Add(1)
 	return execute("df", &waitGroup)
 }
 
-func uptime() string {
+func uptime() (bool, string) {
 	waitGroup.Add(1)
 	return execute("uptime", &waitGroup)
 }
 
-func currentLoad() string {
+func currentLoad() (bool, string) {
 	waitGroup.Add(1)
-	var date = execute("uptime", &waitGroup)
+	success, date := execute("uptime", &waitGroup)
 	parts := strings.Fields(date)
 	parts = parts[(len(parts) - 3):len(parts)]
-	return string(parts[0] + " " + parts[1] + " " + parts[2])
+	return success, string(parts[0] + " " + parts[1] + " " + parts[2])
+
 }
 
-func execute(cmd string, wg *sync.WaitGroup) string {
+func execute(cmd string, wg *sync.WaitGroup) (bool, string) {
 	//function from http://stackoverflow.com/questions/20437336/how-to-execute-system-command-in-golang-with-unknown-arguments
 	//	fmt.Println("command is ", cmd)
 	// splitting head => g++ parts => rest of the command
@@ -39,11 +40,13 @@ func execute(cmd string, wg *sync.WaitGroup) string {
 	head := parts[0]
 	parts = parts[1:len(parts)]
 
+	success := true
 	out, err := exec.Command(head, parts...).Output()
 	if err != nil {
 		fmt.Printf("%s", err)
+		success = false
 	}
 	//fmt.Printf("%s", out)
 	wg.Done() // Need to signal to waitgroup that this goroutine is done
-	return string(out[:len(out)])
+	return success, string(out[:len(out)])
 }
