@@ -14,6 +14,6 @@ func NewStatusHandler() *StatusHandler {
 }
 
 func (handler *StatusHandler) HandleStatusMessage(msg *api.ResponseMessage, recvAddr *net.UDPAddr) {
-	fmt.Println("Status Received")
+	fmt.Println(string(msg.Value))
 
 }

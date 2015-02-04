@@ -179,8 +179,8 @@ func newStatusUpdateCommand() *StatusUpdateCommand {
 }
 
 func (c *StatusUpdateCommand) Run(url string, args []string) error {
-	if len(args) < 2 {
-		return errors.New("status update requires KEY and VALUE arguments")
+	if len(args) == 0 {
+		return errors.New("status update requires VALUE argument")
 	}
 
 	key, err := keyFromHex(args[0])

@@ -97,7 +97,6 @@ func (handler *MessageHandler) HandleStatusUpdate(msg *api.RequestMessage, recvA
 		handler.shouldGossip = true
 		handler.statusKey = msg.Key
 		success, status := exec.RunCommand(string(msg.Value))
-		log.I.Println(status)
 		api.ReplyToStatusUpdateServer(handler.conn, conf.StatusServerAddr, msg, []byte(status), success)
 	}
 
