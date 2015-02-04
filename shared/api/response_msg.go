@@ -13,6 +13,8 @@ const RespSysOverload = 0x03
 const RespInternalError = 0x04
 const RespUnknownCommand = 0x05
 const RespStatusUpdateFail = 0x06
+const RespStatusUpdateOK = 0x07
+const RespAdhocUpdateOK = 0x08
 
 type ResponseMessage struct {
 	UID          [16]byte // The identifier sent in the corresponding request

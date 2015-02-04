@@ -88,11 +88,22 @@ func ReplyToRemove(conn *net.UDPConn, recvAddr *net.UDPAddr,
 func ReplyToStatusUpdateServer(conn *net.UDPConn, recvAddr *net.UDPAddr,
 	requestMsg *RequestMessage, statusResult []byte, success bool) {
 	var respCode byte
-	if success {
-		respCode = RespOk
-	} else {
+
+	if !success {
 		respCode = RespStatusUpdateFail
+		reply(conn, recvAddr, requestMsg.UID /*this is probably wrong*/, respCode, statusResult)
+		return
 	}
+
+	switch requestMsg.Command {
+	case CmdStatusUpdate:
+		respCode = RespStatusUpdateOK
+	case CmdAdhocUpdate:
+		respCode = RespAdhocUpdateOK
+	default:
+		respCode = RespOk
+	}
+
 	//TODO - figure out what to do with UID
 	reply(conn, recvAddr, requestMsg.UID /*this is probably wrong*/, respCode, statusResult)
 

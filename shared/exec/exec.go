@@ -13,17 +13,17 @@ func RunCommand(command string) (bool, string) {
 	return execute(command, &waitGroup)
 }
 
-func getDiskSpace() (bool, string) {
+func GetDiskSpace() (bool, string) {
 	waitGroup.Add(1)
 	return execute("df", &waitGroup)
 }
 
-func uptime() (bool, string) {
+func Uptime() (bool, string) {
 	waitGroup.Add(1)
 	return execute("uptime", &waitGroup)
 }
 
-func currentLoad() (bool, string) {
+func CurrentLoad() (bool, string) {
 	waitGroup.Add(1)
 	success, date := execute("uptime", &waitGroup)
 	parts := strings.Fields(date)

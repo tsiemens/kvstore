@@ -4,6 +4,7 @@ import "errors"
 import "encoding/hex"
 import "github.com/tsiemens/kvstore/shared/api"
 import "github.com/tsiemens/kvstore/shared/log"
+import "crypto/rand"
 
 func New(cmdstr string) (cmd Command, err error) {
 	switch cmdstr {
@@ -15,6 +16,8 @@ func New(cmdstr string) (cmd Command, err error) {
 		cmd = newRemoveCommand()
 	case "status":
 		cmd = newStatusUpdateCommand()
+	case "adhoc":
+		cmd = newAdhocUpdateCommand()
 	default:
 		err = errors.New("Unknown command \"" + cmdstr + "\"")
 	}
@@ -179,17 +182,53 @@ func newStatusUpdateCommand() *StatusUpdateCommand {
 }
 
 func (c *StatusUpdateCommand) Run(url string, args []string) error {
-	if len(args) == 0 {
-		return errors.New("status update requires VALUE argument")
+	k := make([]byte, 32)
+	_, err := rand.Read(k)
+	if err != nil {
+		return err
 	}
-
-	key, err := keyFromHex(args[0])
+	key, err := api.NewKey(k)
 	if err != nil {
 		return err
 	}
 
-	value := args[1]
-	err = api.StatusUpdate(url, key, []byte(value))
+	err = api.StatusUpdate(url, key)
+	if err != nil {
+		return err
+	}
+
+	//log.Out.Printf("Set value of %x to %s\n", key, value)
+	return nil
+}
+
+type AdhocUpdateCommand struct {
+	BaseCommand
+}
+
+func newAdhocUpdateCommand() *AdhocUpdateCommand {
+	return &AdhocUpdateCommand{BaseCommand{
+		name: "adhoc update",
+		desc: "Sends an adhoc script to a node to be executed.",
+		args: []string{"VALUE (bash script)"},
+	}}
+}
+
+func (c *AdhocUpdateCommand) Run(url string, args []string) error {
+	if len(args) == 0 {
+		return errors.New("status update requires VALUE argument")
+	}
+	k := make([]byte, 32)
+	_, err := rand.Read(k)
+	if err != nil {
+		return err
+	}
+	key, err := api.NewKey(k)
+	if err != nil {
+		return err
+	}
+
+	value := args[0]
+	err = api.AdhocUpdate(url, key, []byte(value))
 	if err != nil {
 		return err
 	}

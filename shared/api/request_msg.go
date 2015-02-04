@@ -17,6 +17,7 @@ const CmdPut = 0x01
 const CmdGet = 0x02
 const CmdRemove = 0x03
 const CmdStatusUpdate = 0x04
+const CmdAdhocUpdate = 0x05
 
 type RequestMessage struct {
 	UID     [16]byte
@@ -73,11 +74,12 @@ func expectsKeyForCommand(command byte) bool {
 	return command == CmdGet ||
 		command == CmdPut ||
 		command == CmdRemove ||
-		command == CmdStatusUpdate
+		command == CmdStatusUpdate ||
+		command == CmdAdhocUpdate
 }
 
 func expectsValueForCommand(command byte) bool {
-	return command == CmdPut || command == CmdStatusUpdate
+	return command == CmdPut || command == CmdAdhocUpdate
 }
 
 // Parses a request datagram, and returns a RequestMessage representation

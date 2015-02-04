@@ -2,7 +2,6 @@ package config
 
 import (
 	"encoding/json"
-	"fmt"
 	"github.com/tsiemens/kvstore/shared/log"
 	"net"
 	"os"
@@ -43,8 +42,6 @@ func Init(configPath string) {
 	if err != nil {
 		log.E.Println(err)
 	}
-
-	fmt.Println(config)
 }
 
 func GetRandAddr() *net.UDPAddr {

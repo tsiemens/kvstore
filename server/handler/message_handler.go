@@ -49,6 +49,8 @@ func (handler *MessageHandler) HandleRequestMessage(msg *api.RequestMessage, rec
 		handler.HandleRemove(msg, recvAddr)
 	case api.CmdStatusUpdate:
 		handler.HandleStatusUpdate(msg, recvAddr)
+	case api.CmdAdhocUpdate:
+		handler.HandleAdhocUpdate(msg, recvAddr)
 	default:
 		log.D.Println("Received unknown command " + string(msg.Command))
 		api.ReplyToUnknownCommand(handler.conn, recvAddr, msg)
@@ -96,8 +98,14 @@ func (handler *MessageHandler) HandleStatusUpdate(msg *api.RequestMessage, recvA
 	} else {
 		handler.shouldGossip = true
 		handler.statusKey = msg.Key
-		success, status := exec.RunCommand(string(msg.Value))
-		api.ReplyToStatusUpdateServer(handler.conn, conf.StatusServerAddr, msg, []byte(status), success)
+		// TODO handle failures properly
+		success, diskSpace := exec.GetDiskSpace()
+		diskSpace = "Disk space:\n" + diskSpace
+		success, uptime := exec.Uptime()
+		uptime = "Uptime:\n" + uptime
+		success, currentload := exec.CurrentLoad()
+		currentload = "Current load:\n" + currentload
+		api.ReplyToStatusUpdateServer(handler.conn, conf.StatusServerAddr, msg, []byte(diskSpace+uptime+currentload), success)
 	}
 
 	if handler.shouldGossip {
@@ -105,11 +113,26 @@ func (handler *MessageHandler) HandleStatusUpdate(msg *api.RequestMessage, recvA
 	}
 }
 
-func (handler *MessageHandler) ExecuteStatusUpdate(msg *api.RequestMessage) ([]byte, bool) {
-	//TODO - implement
-	// placeholder
-	status := make([]byte, 4)
-	status = []byte("hell")
-	return status, true
+func (handler *MessageHandler) HandleAdhocUpdate(msg *api.RequestMessage, recvAddr *net.UDPAddr) {
+	log.D.Println("Adhoc Update handle called")
+	conf := config.GetConfig()
+	log.I.Println(msg.Key)
+	log.I.Println(handler.statusKey)
+	if handler.statusKey.Equals(msg.Key) {
+		// status already reached node
+		log.D.Println("Status already received")
+		if handler.random.Intn(conf.K) == conf.K-1 {
+			handler.shouldGossip = false
+			return
+		}
+	} else {
+		handler.shouldGossip = true
+		handler.statusKey = msg.Key
+		success, status := exec.RunCommand(string(msg.Value))
+		api.ReplyToStatusUpdateServer(handler.conn, conf.StatusServerAddr, msg, []byte(status), success)
+	}
 
+	if handler.shouldGossip {
+		api.Gossip(handler.conn, msg)
+	}
 }
