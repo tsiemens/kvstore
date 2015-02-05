@@ -1,6 +1,7 @@
 package api
 
 import "errors"
+import "crypto/rand"
 
 // Utilities for creating byte arrays
 // (useful in fixed size portions of messages)
@@ -12,6 +13,19 @@ func NewKey(slice []byte) ([32]byte, error) {
 	} else {
 		return byteArray32(slice), nil
 	}
+}
+
+func NewRandKey() ([32]byte, error) {
+	k := make([]byte, 32)
+	_, err := rand.Read(k)
+	if err != nil {
+		return [32]byte{}, err
+	}
+	key, err := NewKey(k)
+	if err != nil {
+		return [32]byte{}, err
+	}
+	return key, nil
 }
 
 // slice must be at most 32 bytes.

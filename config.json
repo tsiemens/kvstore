@@ -2,9 +2,24 @@
   "NotifyCount": 2,
   "K": 8,
   "StatusServerAddr": {
-    "IP": "127.0.0.1",
+    "IP": "129.110.125.51",
     "Port": 5066,
     "Zone": "ip4"
-  }
+  },
+  "UpdateFrequency": 10000000000,
+  "PortList": [
+    "5555",
+    "6666",
+    "7777",
+    "8888"
+  ],
+  "NodeAddrList": [
+    "planetlab1.utdallas.edu",
+    "planetlab6.cs.uiuc.edu",
+    "planetlab2-buenosaires.lan.redclara.net",
+    "planetlab-01.vt.nodes.planet-lab.org",
+    "pl1.6test.edu.cn",
+    "planetlab1.fit.vutbr.cz"
+  ]
 }
 

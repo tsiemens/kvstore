@@ -3,19 +3,25 @@ package config
 import (
 	"encoding/json"
 	"github.com/tsiemens/kvstore/shared/log"
+	"math/rand"
 	"net"
 	"os"
+	"time"
 )
 
 // This package manages the server configuration
+// TODO - handle errors when init not called
 
 var config *Config
 
 type Config struct {
-	NotifyCount      int                     // number of nodes notified using the gossip protocol
-	K                int                     // K factor in gossip protocol
-	NodeAddrMap      map[string]*net.UDPAddr // temp - need some sort of structure to store all nodes
+	NotifyCount      int      // number of nodes notified using the gossip protocol
+	K                int      // K factor in gossip protocol
+	NodeAddrList     []string // temp - need some sort of structure to store all nodes
+	PortList         []string
 	StatusServerAddr *net.UDPAddr
+	UpdateFrequency  time.Duration
+	HostName         string
 }
 
 func Init(configPath string) {
@@ -42,12 +48,25 @@ func Init(configPath string) {
 	if err != nil {
 		log.E.Println(err)
 	}
+
+	// get host name
+	hostname, err := os.Hostname()
+	if err != nil {
+		log.E.Printf("Error getting hostname:", err)
+	}
+	config.HostName = hostname
+
+	log.D.Println(config)
 }
 
-func GetRandAddr() *net.UDPAddr {
-	//TODO return addr of random peer in network
-	addr, _ := net.ResolveUDPAddr("udp", ":5067")
-	return addr
+func (c *Config) GetRandAddr() string {
+	randHost := c.NodeAddrList[rand.Intn(len(c.NodeAddrList))]
+	// prevent host from picking itself
+	for randHost == c.HostName {
+		randHost = c.NodeAddrList[rand.Intn(len(c.NodeAddrList))]
+	}
+
+	return randHost + ":" + c.PortList[0]
 }
 
 func GetConfig() *Config {

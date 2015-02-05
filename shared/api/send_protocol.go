@@ -41,6 +41,7 @@ func Remove(url string, key [32]byte) error {
 }
 
 func StatusUpdate(url string, key [32]byte) error {
+	log.D.Println("Sending status update to", url)
 	_, err := send(url, func(addr *net.UDPAddr) *RequestMessage {
 		return newRequestMessage(addr, CmdStatusUpdate, key, make([]byte, 0, 0))
 	})
