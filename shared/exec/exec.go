@@ -2,7 +2,6 @@ package exec
 
 import "fmt"
 import "sync"
-import "strings"
 import "os/exec"
 
 var waitGroup sync.WaitGroup
@@ -18,6 +17,11 @@ func GetDiskSpace() (bool, string) {
 	return execute("df", &waitGroup)
 }
 
+func GetDeploymentDiskSpace() (bool, string) {
+	waitGroup.Add(1)
+	return execute("du -s", &waitGroup)
+}
+
 func Uptime() (bool, string) {
 	waitGroup.Add(1)
 	return execute("uptime", &waitGroup)
@@ -25,28 +29,23 @@ func Uptime() (bool, string) {
 
 func CurrentLoad() (bool, string) {
 	waitGroup.Add(1)
-	success, date := execute("uptime", &waitGroup)
-	parts := strings.Fields(date)
-	parts = parts[(len(parts) - 3):len(parts)]
-	return success, string(parts[0] + " " + parts[1] + " " + parts[2])
+	return execute("uptime | awk -F'[a-z]:' '{ print $2}'", &waitGroup)
 
 }
 
 func execute(cmd string, wg *sync.WaitGroup) (bool, string) {
-	//function from http://stackoverflow.com/questions/20437336/how-to-execute-system-command-in-golang-with-unknown-arguments
-	//	fmt.Println("command is ", cmd)
-	// splitting head => g++ parts => rest of the command
-	parts := strings.Fields(cmd)
-	head := parts[0]
-	parts = parts[1:len(parts)]
+	//function originaly from http://stackoverflow.com/questions/20437336/how-to-execute-system-command-in-golang-with-unknown-arguments
+	//altered to execute all commands through bash insted of directly.
+	//	running commands through bash allows for piping output
 
+	//	fmt.Println("command is ", cmd)
 	success := true
-	out, err := exec.Command(head, parts...).Output()
+	out, err := exec.Command("bash", "-c", cmd).Output()
 	if err != nil {
 		fmt.Printf("%s", err)
 		success = false
 	}
-	//fmt.Printf("%s", out)
+	//fmt.Printf("%s\n", out)	//view result of command
 	wg.Done() // Need to signal to waitgroup that this goroutine is done
 	return success, string(out[:len(out)])
 }
