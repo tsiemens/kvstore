@@ -10,6 +10,7 @@ import "github.com/tsiemens/kvstore/shared/util"
 import "github.com/tsiemens/kvstore/server/handler"
 import "github.com/tsiemens/kvstore/server/store"
 import "github.com/tsiemens/kvstore/server/config"
+import "github.com/tsiemens/kvstore/server/httpServer"
 
 func main() {
 	log.Init(ioutil.Discard, os.Stdout, os.Stderr)
@@ -29,8 +30,12 @@ func main() {
 	log.Out.Printf("Started server on %s", localAddr.String())
 
 	if cl.StatusServer {
+		log.Out.Printf("Starting http server")
+		go httpServer.CreateHttpServer()
 		statusHandler := handler.NewStatusHandler()
+		log.Out.Printf("Starting status receiver")
 		err = api.StatusReceiver(conn, statusHandler)
+		
 	} else {
 		msgHandler := handler.NewMessageHandler(store, conn, cl.PacketLossPct)
 		err = api.LoopReceiver(conn, msgHandler)

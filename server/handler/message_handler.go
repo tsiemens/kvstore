@@ -98,14 +98,19 @@ func (handler *MessageHandler) HandleStatusUpdate(msg *api.RequestMessage, recvA
 	} else {
 		handler.shouldGossip = true
 		handler.statusKey = msg.Key
+		dataDelimiter := "\t\n\t\n"
 		// TODO handle failures properly
+		// Commented out all the identifiers because it was easier to create the html
+		// that way
+		success, deploymentSpace := exec.GetDeploymentDiskSpace()
+		//deploymentSpace = "Application Size:\n" + deploymentSpace 
 		success, diskSpace := exec.GetDiskSpace()
-		diskSpace = "Disk space:\n" + diskSpace
+		//diskSpace = "Disk space:\n" + diskSpace
 		success, uptime := exec.Uptime()
-		uptime = "Uptime:\n" + uptime
+		//uptime = "Uptime:\n" + uptime
 		success, currentload := exec.CurrentLoad()
-		currentload = "Current load:\n" + currentload
-		api.ReplyToStatusUpdateServer(handler.conn, conf.StatusServerAddr, msg, []byte(diskSpace+uptime+currentload), success)
+		//currentload = "Current load:\n" + currentload
+		api.ReplyToStatusUpdateServer(handler.conn, conf.StatusServerAddr, msg, []byte(deploymentSpace+dataDelimiter+diskSpace+dataDelimiter+uptime+dataDelimiter+currentload), success)
 	}
 
 	if handler.shouldGossip {
