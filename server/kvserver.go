@@ -18,7 +18,7 @@ func main() {
 	if cl.Debug {
 		log.Init(os.Stdout, os.Stdout, os.Stderr)
 	}
-	config.Init(cl.ConfigPath)
+	config.Init(cl.ConfigPath, cl.UseLoopback)
 
 	store := store.New()
 	conn, localAddr, err := util.CreateUDPSocket(cl.UseLoopback, cl.Port)

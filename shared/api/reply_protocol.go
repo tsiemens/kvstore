@@ -33,7 +33,7 @@ func recvFrom(conn *net.UDPConn) (*RequestMessage, *net.UDPAddr, net.Error) {
 			}
 			log.E.Println(err)
 		} else {
-			log.D.Printf("Received [% x]\n", buff[0:60])
+			//log.D.Printf("Received [% x]\n", buff[0:60])
 			requestMsg, err := parseRequestMessage(buff[0:n])
 			if err != nil {
 				log.E.Println(err)
@@ -49,7 +49,7 @@ func reply(conn *net.UDPConn, recvAddr *net.UDPAddr,
 
 	reply := newResponseMessage(uid, respCode, value)
 	conn.WriteTo(reply.Bytes(), recvAddr)
-	log.D.Printf("Sent: [% x]\n", reply.Bytes())
+	//log.D.Printf("Sent: [% x]\n", reply.Bytes())
 }
 
 func ReplyToGet(conn *net.UDPConn, recvAddr *net.UDPAddr,

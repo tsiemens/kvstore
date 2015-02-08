@@ -19,7 +19,7 @@ func StatusReceiver(conn *net.UDPConn, handler StatusMessageHandler) error {
 				return err
 			}
 		} else {
-			log.D.Println("Received message from", recvAddr)
+			//log.D.Println("Received message from", recvAddr)
 			go handler.HandleStatusMessage(msg, recvAddr)
 		}
 	}
@@ -51,7 +51,7 @@ func recvFromStatus(conn *net.UDPConn) (*ResponseMessage, *net.UDPAddr, net.Erro
 			}
 			log.E.Println(err)
 		} else {
-			log.D.Printf("Received [% x]\n", buff[0:60])
+			//log.D.Printf("Received [% x]\n", buff[0:60])
 			responseMsg, err := parseResponseMessage(buff[0:n])
 			if err != nil {
 				log.E.Println(err)

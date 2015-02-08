@@ -81,7 +81,7 @@ func sendRecv(url string, buildMsg requestMessageBuilder) ([]byte, error) {
 	for tries := retries; tries > 0; tries-- {
 		// Send message/resend if timeout occurred
 		con.WriteTo(msgToSend.Bytes(), remoteAddr)
-		log.D.Printf("Sent: [% x]\n", msgToSend.Bytes())
+		//log.D.Printf("Sent: [% x]\n", msgToSend.Bytes())
 		msg, err := receiver.recvMsg(timeout)
 		netErr = err
 		if netErr != nil {
@@ -116,7 +116,7 @@ func send(url string, buildMsg requestMessageBuilder) ([]byte, error) {
 
 	msgToSend := buildMsg(localAddr)
 	con.WriteTo(msgToSend.Bytes(), remoteAddr)
-	log.D.Printf("Sent: [% x]\n", msgToSend.Bytes())
+	//log.D.Printf("Sent: [% x]\n", msgToSend.Bytes())
 	// TODO return proper errors
 	return nil, nil
 }
@@ -149,7 +149,7 @@ func (self *protocolReceiver) recvMsg(timeoutms int) (*ResponseMessage, net.Erro
 		} else if recvAddr.IP.Equal(self.RemoteAddr.IP) &&
 			recvAddr.Port == self.RemoteAddr.Port {
 
-			log.D.Printf("Received [% x]\n", buff[0:60])
+			//log.D.Printf("Received [% x]\n", buff[0:60])
 			serverMsg, err := parseResponseMessage(buff[0:n])
 			if err == nil && serverMsg.UID == self.MsgUID {
 				return serverMsg, nil

@@ -3,9 +3,11 @@ package config
 import (
 	"encoding/json"
 	"github.com/tsiemens/kvstore/shared/log"
+	"github.com/tsiemens/kvstore/shared/util"
 	"math/rand"
 	"net"
 	"os"
+	"strconv"
 	"time"
 )
 
@@ -13,19 +15,22 @@ import (
 // TODO - handle errors when init not called
 
 var config *Config
+var useLoopback bool
 
 type Config struct {
-	NotifyCount      int      // number of nodes notified using the gossip protocol
-	K                int      // K factor in gossip protocol
-	NodeAddrList     []string // temp - need some sort of structure to store all nodes
-	PortList         []string
-	StatusServerAddr *net.UDPAddr
-	UpdateFrequency  time.Duration
-	HostName         string
+	NotifyCount      int           // number of nodes notified using the gossip protocol
+	K                int           // K factor in gossip protocol
+	PeerList         []string      // hostnames of all other nodes in network
+	DefaultPortList  []string      // default ports to communicate on
+	StatusServer     string        // hostname of status server
+	StatusServerAddr *net.UDPAddr  // addr of status server
+	UpdateFrequency  time.Duration // how often the status server requests node updates
+	Hostname         string        // this servers hostname
 }
 
-func Init(configPath string) {
-
+func Init(configPath string, useloopback bool) {
+	useLoopback = useloopback
+	rand.New(rand.NewSource(util.UnixMilliTimestamp()))
 	// Check if configPath is valid
 	if ok, err := exists(configPath); !ok {
 		if err == nil {
@@ -54,19 +59,34 @@ func Init(configPath string) {
 	if err != nil {
 		log.E.Printf("Error getting hostname:", err)
 	}
-	config.HostName = hostname
+	config.Hostname = hostname
 
-	log.D.Println(config)
+	// resolve status server addr
+	if useLoopback {
+		config.StatusServer = "localhost"
+	}
+	addr, err := net.ResolveUDPAddr("udp", config.StatusServer+":"+config.DefaultPortList[1])
+	if err != nil {
+		log.E.Printf("Error resolving status server:", err)
+	}
+	config.StatusServerAddr = addr
+	log.D.Println(config.PeerList)
 }
 
 func (c *Config) GetRandAddr() string {
-	randHost := c.NodeAddrList[rand.Intn(len(c.NodeAddrList))]
+	if useLoopback {
+		basePort, _ := strconv.Atoi(c.DefaultPortList[0])
+		port := rand.Intn(len(c.PeerList)) + basePort
+		addr := strconv.Itoa(port)
+		return "localhost:" + addr
+	}
+	randHost := c.PeerList[rand.Intn(len(c.PeerList))]
 	// prevent host from picking itself
-	for randHost == c.HostName {
-		randHost = c.NodeAddrList[rand.Intn(len(c.NodeAddrList))]
+	for randHost == c.Hostname {
+		randHost = c.PeerList[rand.Intn(len(c.PeerList))]
 	}
 
-	return randHost + ":" + c.PortList[0]
+	return randHost + ":" + c.DefaultPortList[0]
 }
 
 func GetConfig() *Config {
