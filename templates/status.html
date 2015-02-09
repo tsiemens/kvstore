@@ -10,6 +10,12 @@
     table {
       border-spacing: 2px;
     }
+
+    .inner-table{
+      padding: 0px;
+      border-spacing: 0px;
+    }
+
 </style>
 </head>
 
@@ -21,20 +27,39 @@
       <th>Node</th>
       <th>Status</th>
       <th>Last Seen</th>
-      <th>Application Space</th>
       <th>Disk Space</th>
+      <th>Application Space</th>
       <th>Uptime</th>
       <th>Current Load</th>
     </tr>
     {{ range $index, $value := $ }}
     <tr>
-      <th>{{ $index }}</th>
-      <th>{{ $value.Status }}</th>
-      <th>{{ $value.LastSeen }}</th>
-      <th>{{ $value.ApplicationSpace}}</th>
-      <th>{{ $value.DiskSpace }}</th>
-      <th>{{ $value.Uptime }}</th>
-      <th>{{ $value.CurrentLoad }}</th>
+      <td>{{ $index }}</th>
+      <td>{{ $value.Status }}</th>
+      <td>{{ $value.LastSeen }}</th>
+      <td class='inner-table'>
+        <table class='inner-table'>
+          <tr class='inner-table'>
+            <th class='inner-table'>Filesystem</th>
+            <th class='inner-table'>Used</th>
+            <th class='inner-table'>Avail</th>
+            <th class='inner-table'>Use%</th>
+            <th class='inner-table'>Mount</th>
+          </tr>
+          {{ range $value.DiskSpace }}
+          <tr class='inner-table'>
+            <td class='inner-table'> {{.Filesystem}} </td>
+            <td class='inner-table'> {{.Used}} </td>
+            <td class='inner-table'> {{.Available}} </td>
+            <td class='inner-table'> {{.UsePercentage}} </td>
+            <td class='inner-table'> {{.MountedOn}} </td>
+          </tr>
+          {{ end }}
+        </table>
+      </th>
+      <td>{{ $value.ApplicationSpace }}</th>
+      <td>{{ $value.Uptime }}</th>
+      <td>{{ $value.CurrentLoad }}</th>
     <tr>
     {{ end }}
 

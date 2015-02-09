@@ -67,7 +67,7 @@ func parseDiskSpace(input string) []*DiskSpaceEntry {
 		return nil
 	}
 	tableInfo := diskSpaceInfo[7:]
-	for i := 0; i < len(tableInfo)-6; i = i + 6 {
+	for i := 0; i < len(tableInfo); i = i + 6 {
 		diskSpaceEntry := &DiskSpaceEntry{
 			Filesystem:    tableInfo[0+i],
 			Blocks:        tableInfo[1+i],

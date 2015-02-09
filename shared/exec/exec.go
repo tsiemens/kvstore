@@ -14,7 +14,7 @@ func RunCommand(command string) (bool, string) {
 
 func GetDiskSpace() (bool, string) {
 	waitGroup.Add(1)
-	return execute("df", &waitGroup)
+	return execute("df -h /", &waitGroup)
 }
 
 func GetDeploymentDiskSpace() (bool, string) {

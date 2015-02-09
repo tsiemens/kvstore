@@ -103,7 +103,7 @@ func (handler *MessageHandler) HandleStatusUpdate(msg *api.RequestMessage, recvA
 		// Commented out all the identifiers because it was easier to create the html
 		// that way
 		success, deploymentSpace := exec.GetDeploymentDiskSpace()
-		//deploymentSpace = "Application Size:\n" + deploymentSpace 
+		//deploymentSpace = "Application Size:\n" + deploymentSpace
 		success, diskSpace := exec.GetDiskSpace()
 		//diskSpace = "Disk space:\n" + diskSpace
 		success, uptime := exec.Uptime()

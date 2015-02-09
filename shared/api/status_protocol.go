@@ -28,7 +28,6 @@ func StatusReceiver(conn *net.UDPConn, handler StatusMessageHandler) error {
 func periodicStatusUpdate(conn *net.UDPConn) {
 	conf := config.GetConfig()
 	for {
-		time.Sleep(conf.UpdateFrequency)
 		key, err := NewRandKey()
 		if err != nil {
 			log.E.Println(err)
@@ -37,6 +36,7 @@ func periodicStatusUpdate(conn *net.UDPConn) {
 		if err != nil {
 			log.E.Println(err)
 		}
+		time.Sleep(conf.UpdateFrequency)
 	}
 }
 
