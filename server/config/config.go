@@ -66,7 +66,7 @@ func Init(configPath string, useloopback bool) {
 	if useLoopback {
 		config.StatusServer = "localhost"
 	}
-	addr, err := net.ResolveUDPAddr("udp", config.StatusServer+":"+config.DefaultPortList[1])
+	addr, err := net.ResolveUDPAddr("udp", config.StatusServer+":"+strconv.Itoa(config.StatusServerPort))
 	if err != nil {
 		log.E.Printf("Error resolving status server:", err)
 	}
