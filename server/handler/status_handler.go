@@ -1,22 +1,39 @@
 package handler
 
 import (
-	"fmt"
 	"github.com/tsiemens/kvstore/shared/api"
 	"net"
 	"strings"
 	"time"
-	"crypto/rand"
 )
 
-type StatusHandler struct {
-	ApplicationSpace	string
-	DiskSpace			string
-	Uptime				string
-	CurrentLoad			string
+const (
+	UP      = 0
+	OFFLINE = 1
+)
+
+type Status struct {
+	Status           int
+	LastSeen         time.Time
+	ApplicationSpace string
+	DiskSpace        []*DiskSpaceEntry
+	Uptime           string
+	CurrentLoad      string
 }
 
-var statusList []StatusHandler
+type DiskSpaceEntry struct {
+	Filesystem    string
+	Blocks        string
+	Used          string
+	Available     string
+	UsePercentage string
+	MountedOn     string
+}
+
+type StatusHandler struct {
+}
+
+var statusList map[string]Status
 
 func NewStatusHandler() *StatusHandler {
 	return &StatusHandler{}
@@ -24,38 +41,43 @@ func NewStatusHandler() *StatusHandler {
 
 func (handler *StatusHandler) HandleStatusMessage(msg *api.ResponseMessage, recvAddr *net.UDPAddr) {
 	if statusList == nil {
-		statusList = make([]StatusHandler, 0)
+		statusList = make(map[string]Status, 0)
 	}
 	data := strings.Split(string(msg.Value), "\t\n\t\n")
-	newStatus := StatusHandler{strings.TrimSpace(data[0]), strings.TrimSpace(data[1]), strings.TrimSpace(data[2]), strings.TrimSpace(data[3])}
-	statusList = append(statusList, newStatus)
-	for _, status := range statusList {
-		fmt.Println(status)
+	newStatus := Status{
+		1,
+		time.Now(),
+		strings.TrimSpace(data[0]),
+		parseDiskSpace(strings.TrimSpace(data[1])),
+		strings.TrimSpace(data[2]),
+		strings.TrimSpace(data[3]),
 	}
+	statusList[recvAddr.String()] = newStatus
 }
 
-func RequestStatusUpdate() ([]StatusHandler, error) {
-	statusList = nil 
-	buff := make([]byte, 32)
-	
-	 _, err := rand.Read(buff) 
-	 if err != nil {
-	 	return nil, err
-	 }
+func GetStatusList() map[string]Status {
+	return statusList
+}
 
-	 key, err := api.NewKey(buff)
-	 if(err != nil) {
-	 	return nil, err
-	 }
+func parseDiskSpace(input string) []*DiskSpaceEntry {
+	diskSpaceEntries := make([]*DiskSpaceEntry, 0)
 
-	 //Hardcoded the value of the server to fetch and update from for testing purposes
-	 //It will need to be retrieved from a list of available servers I would assume
-	 err = api.StatusUpdate("localhost:64000", key)
-	 if(err != nil) {
-	 	return nil, err
-	 }
+	diskSpaceInfo := strings.Fields(input)
+	if len(diskSpaceInfo) < 7 || len(diskSpaceInfo)%7 == 0 {
+		return nil
+	}
+	tableInfo := diskSpaceInfo[7:]
+	for i := 0; i < len(tableInfo)-6; i = i + 6 {
+		diskSpaceEntry := &DiskSpaceEntry{
+			Filesystem:    tableInfo[0+i],
+			Blocks:        tableInfo[1+i],
+			Used:          tableInfo[2+i],
+			Available:     tableInfo[3+i],
+			UsePercentage: tableInfo[4+i],
+			MountedOn:     tableInfo[5+i],
+		}
 
-	 time.Sleep(10 * time.Second)
-
-	 return statusList, nil
+		diskSpaceEntries = append(diskSpaceEntries, diskSpaceEntry)
+	}
+	return diskSpaceEntries
 }

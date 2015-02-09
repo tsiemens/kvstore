@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Status Page</title>
+  <style>
+    table, th, td {
+      border: 1px solid black;
+      padding: 5px;
+    }
+    table {
+      border-spacing: 2px;
+    }
+</style>
+</head>
+
+<body>
+
+  <h1>Status</h1>
+  <table>
+    <tr>
+      <th>Node</th>
+      <th>Status</th>
+      <th>Last Seen</th>
+      <th>Application Space</th>
+      <th>Disk Space</th>
+      <th>Uptime</th>
+      <th>Current Load</th>
+    </tr>
+    {{ range $index, $value := $ }}
+    <tr>
+      <th>{{ $index }}</th>
+      <th>{{ $value.Status }}</th>
+      <th>{{ $value.LastSeen }}</th>
+      <th>{{ $value.ApplicationSpace}}</th>
+      <th>{{ $value.DiskSpace }}</th>
+      <th>{{ $value.Uptime }}</th>
+      <th>{{ $value.CurrentLoad }}</th>
+    <tr>
+    {{ end }}
+
+  </table>
+
+</body>
+
+</html>
+  
+

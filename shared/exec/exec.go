@@ -19,12 +19,12 @@ func GetDiskSpace() (bool, string) {
 
 func GetDeploymentDiskSpace() (bool, string) {
 	waitGroup.Add(1)
-	return execute("du -s", &waitGroup)
+	return execute("du -sh | grep -i -o -E '[[:alnum:]]+'", &waitGroup)
 }
 
 func Uptime() (bool, string) {
 	waitGroup.Add(1)
-	return execute("uptime", &waitGroup)
+	return execute("uptime | grep -i -o '.*users'", &waitGroup)
 }
 
 func CurrentLoad() (bool, string) {
