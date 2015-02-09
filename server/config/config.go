@@ -18,12 +18,13 @@ var config *Config
 var useLoopback bool
 
 type Config struct {
-	NotifyCount      int           // number of nodes notified using the gossip protocol
-	K                int           // K factor in gossip protocol
-	PeerList         []string      // hostnames of all other nodes in network
-	DefaultPortList  []string      // default ports to communicate on
-	StatusServer     string        // hostname of status server
-	StatusServerAddr *net.UDPAddr  // addr of status server
+	NotifyCount      int          // number of nodes notified using the gossip protocol
+	K                int          // K factor in gossip protocol
+	PeerList         []string     // hostnames of all other nodes in network
+	DefaultPortList  []string     // default ports to communicate on
+	StatusServer     string       // hostname of status server
+	StatusServerAddr *net.UDPAddr // addr of status server
+	StatusServerPort int
 	UpdateFrequency  time.Duration // how often the status server requests node updates
 	Hostname         string        // this servers hostname
 }

@@ -22,10 +22,19 @@ func main() {
 	config.Init(cl.ConfigPath, cl.UseLoopback)
 
 	store := store.New()
-	conn, localAddr, err := util.CreateUDPSocket(cl.UseLoopback, cl.Port)
+
+	var port int
+	if cl.StatusServer {
+		port = config.GetConfig().StatusServerPort
+	} else {
+		port = cl.Port
+	}
+
+	conn, localAddr, err := util.CreateUDPSocket(cl.UseLoopback, port)
 	if err != nil {
 		log.E.Panic(err)
 	}
+
 	defer conn.Close()
 	log.Out.Printf("Started server on %s", localAddr.String())
 
@@ -35,7 +44,7 @@ func main() {
 		statusHandler := handler.NewStatusHandler()
 		log.Out.Printf("Starting status receiver")
 		err = api.StatusReceiver(conn, statusHandler)
-		
+
 	} else {
 		msgHandler := handler.NewMessageHandler(store, conn, cl.PacketLossPct)
 		err = api.LoopReceiver(conn, msgHandler)

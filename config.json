@@ -2,6 +2,7 @@
   "NotifyCount": 1,
   "K": 8,
   "StatusServer": "planetlab1.fit.vutbr.cz",
+  "StatusServerPort": 6667,
   "UpdateFrequency": 10000000000,
   "DefaultPortList": [
     "5555",
