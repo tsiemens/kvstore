@@ -41,3 +41,14 @@ func GetMyIP(loopback bool) (net.IP, error) {
 func UnixMilliTimestamp() int64 {
 	return time.Now().UnixNano() / int64(time.Millisecond)
 }
+
+func IsHostReachable(host string, timeout time.Duration, portRange []string) bool {
+	for _, port := range portRange {
+		_, err := net.DialTimeout("udp", host+":"+port, timeout)
+		if err == nil {
+			return true
+		}
+	}
+
+	return false
+}
