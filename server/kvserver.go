@@ -3,6 +3,7 @@ package main
 import "flag"
 import "os"
 import "io/ioutil"
+import "strconv"
 
 import "github.com/tsiemens/kvstore/shared/api"
 import "github.com/tsiemens/kvstore/shared/log"
@@ -40,9 +41,8 @@ func main() {
 
 	if cl.StatusServer {
 		log.Out.Printf("Starting http server")
-		go httpServer.CreateHttpServer()
 		statusHandler := handler.NewStatusHandler()
-		statusHandler.NewStatusList(cl) //initalize the PeerList
+		go httpServer.CreateHttpServer(strconv.Itoa(config.GetConfig().StatusServerHttpPort), statusHandler)
 		log.Out.Printf("Starting status receiver")
 		err = api.StatusReceiver(conn, statusHandler)
 

@@ -3,19 +3,23 @@ package handler
 import (
 	"github.com/tsiemens/kvstore/server/config"
 	"github.com/tsiemens/kvstore/shared/api"
+	"github.com/tsiemens/kvstore/shared/log"
+	"github.com/tsiemens/kvstore/shared/util"
+	"html/template"
 	"net"
+	"net/http"
 	"strings"
 	"time"
 )
 
 const (
-	UP        = 0
-	OFFLINE   = 1
-	UNDEFINED = -1
+	UP             = "UP"
+	OFFLINE        = "Offline"
+	NOT_RESPONDING = "Not Responding"
 )
 
 type Status struct {
-	Status           int
+	Status           string
 	LastSeen         time.Time
 	ApplicationSpace string
 	DiskSpace        []*DiskSpaceEntry
@@ -33,60 +37,99 @@ type DiskSpaceEntry struct {
 }
 
 type StatusHandler struct {
+	StatusList map[string]*Status
 }
-
-var statusList map[string]Status
 
 func NewStatusHandler() *StatusHandler {
-	return &StatusHandler{}
-}
 
-func NewStatusList(c *Config) {
-	if statusList == nil {
-		statusList = make(map[string]Status, 0)
-	}
-	//add all of the servers in the PeerList to the statusList
-	for i := 0; i < len(c.PeerList); i++ { /*more items to be added to the statusList*/
-		//set initial values for undefined status nodes here
-		newStatus := Status{
-			UNDEFINED,  /*using -1 for a node that has never checked in with the server	*/
+	statusList := make(map[string]*Status, 0)
+	c := config.GetConfig()
+
+	for _, node := range c.PeerList {
+		var nodeStatus string
+		if util.IsHostReachable(node, config.GetConfig().DialTimeout, config.GetConfig().DefaultPortList) {
+			nodeStatus = UP
+		} else {
+			nodeStatus = OFFLINE
+		}
+		newStatus := &Status{
+			nodeStatus,
 			time.Now(), /*time //note that this field will hold the time the list was initalized*/
 			"",         /*space used by the application*/
-			DiskSpaceEntry{
-				"", /*Filesystem	*/
-				"", /*Blocks	*/
-				"", /*Used	*/
-				"", /*Available	*/
-				"", /*UsePercentage	*/
-				"", /*MountedOn	*/
-			}, /*disk space on the system*/
+			[]*DiskSpaceEntry{},
 			"", /*uptime*/
 			"", /*current load*/
 		}
-		statusList[c.Peerlist[i]] = newStatus
+		statusList[node] = newStatus
 	}
-
+	return &StatusHandler{
+		StatusList: statusList,
+	}
 }
 
 func (handler *StatusHandler) HandleStatusMessage(msg *api.ResponseMessage, recvAddr *net.UDPAddr) {
-	if statusList == nil {
-		statusList = make(map[string]Status, 0)
-	}
 	data := strings.Split(string(msg.Value), "\t\n\t\n")
-	newStatus := Status{
-		1,
+	//TODO - update old status instead of creating new status
+	newStatus := &Status{
+		UP,
 		time.Now(),
 		strings.TrimSpace(data[0]),
 		parseDiskSpace(strings.TrimSpace(data[1])),
 		strings.TrimSpace(data[2]),
 		strings.TrimSpace(data[3]),
 	}
-	statusList[recvAddr.String()] = newStatus
+
+	peers, err := net.LookupAddr(recvAddr.IP.String())
+	if err != nil {
+		log.E.Println(err)
+	}
+
+	for _, peer := range peers {
+		// for some reason the return value has a . at the end
+		if len(peer) > 0 {
+			peer = peer[:len(peer)-1]
+		}
+		_, ok := handler.StatusList[peer]
+		if ok {
+			handler.StatusList[peer] = newStatus
+		}
+	}
+	handler.CheckNodeReach()
 }
 
+func (handler *StatusHandler) CheckNodeReach() {
+	for node, status := range handler.StatusList {
+		if time.Now().Sub(status.LastSeen) > config.GetConfig().NodeTimeout {
+			if status.Status == UP || status.Status == NOT_RESPONDING {
+				if util.IsHostReachable(node, config.GetConfig().DialTimeout, config.GetConfig().DefaultPortList) {
+					status.Status = NOT_RESPONDING
+				} else {
+					status.Status = OFFLINE
+				}
+			}
+		}
+	}
+}
+
+func (handler *StatusHandler) ServeHttp(writer http.ResponseWriter, req *http.Request) {
+
+	t := template.New("status.html")
+	t, err := t.ParseFiles("templates/status.html")
+	if err != nil {
+		log.E.Println(err)
+	}
+	err = t.Execute(writer, handler.StatusList)
+	if err != nil {
+		log.E.Println(err)
+	}
+
+}
+
+/*
 func GetStatusList() map[string]Status {
 	return statusList
 }
+*/
 
 func parseDiskSpace(input string) []*DiskSpaceEntry {
 	diskSpaceEntries := make([]*DiskSpaceEntry, 0)

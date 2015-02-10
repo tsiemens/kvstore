@@ -18,20 +18,22 @@ var config *Config
 var useLoopback bool
 
 type Config struct {
-	NotifyCount      int          // number of nodes notified using the gossip protocol
-	K                int          // K factor in gossip protocol
-	PeerList         []string     // hostnames of all other nodes in network
-	DefaultPortList  []string     // default ports to communicate on
-	StatusServer     string       // hostname of status server
-	StatusServerAddr *net.UDPAddr // addr of status server
-	StatusServerPort int
-	UpdateFrequency  time.Duration // how often the status server requests node updates
-	Hostname         string        // this servers hostname
+	NotifyCount          int          // number of nodes notified using the gossip protocol
+	K                    int          // K factor in gossip protocol
+	PeerList             []string     // hostnames of all other nodes in network
+	DefaultPortList      []string     // default ports to communicate on
+	StatusServer         string       // hostname of status server
+	StatusServerAddr     *net.UDPAddr // addr of status server
+	StatusServerPort     int
+	StatusServerHttpPort int
+	UpdateFrequency      time.Duration // how often the status server requests node updates
+	NodeTimeout          time.Duration // how long a dial tried before timing out
+	DialTimeout          time.Duration
+	Hostname             string // this servers hostname
 }
 
 func Init(configPath string, useloopback bool) {
 	useLoopback = useloopback
-	rand.New(rand.NewSource(util.UnixMilliTimestamp()))
 	// Check if configPath is valid
 	if ok, err := exists(configPath); !ok {
 		if err == nil {
@@ -75,6 +77,7 @@ func Init(configPath string, useloopback bool) {
 }
 
 func (c *Config) GetRandAddr() string {
+	rand.New(rand.NewSource(util.UnixMilliTimestamp()))
 	if useLoopback {
 		basePort, _ := strconv.Atoi(c.DefaultPortList[0])
 		port := rand.Intn(len(c.PeerList)) + basePort
