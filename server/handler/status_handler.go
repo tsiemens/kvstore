@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"github.com/tsiemens/kvstore/server/config"
 	"github.com/tsiemens/kvstore/shared/api"
 	"net"
 	"strings"
@@ -8,8 +9,9 @@ import (
 )
 
 const (
-	UP      = 0
-	OFFLINE = 1
+	UP        = 0
+	OFFLINE   = 1
+	UNDEFINED = -1
 )
 
 type Status struct {
@@ -37,6 +39,33 @@ var statusList map[string]Status
 
 func NewStatusHandler() *StatusHandler {
 	return &StatusHandler{}
+}
+
+func NewStatusList(c *Config) {
+	if statusList == nil {
+		statusList = make(map[string]Status, 0)
+	}
+	//add all of the servers in the PeerList to the statusList
+	for i := 0; i < len(c.PeerList); i++ { /*more items to be added to the statusList*/
+		//set initial values for undefined status nodes here
+		newStatus := Status{
+			UNDEFINED,  /*using -1 for a node that has never checked in with the server	*/
+			time.Now(), /*time //note that this field will hold the time the list was initalized*/
+			"",         /*space used by the application*/
+			DiskSpaceEntry{
+				"", /*Filesystem	*/
+				"", /*Blocks	*/
+				"", /*Used	*/
+				"", /*Available	*/
+				"", /*UsePercentage	*/
+				"", /*MountedOn	*/
+			}, /*disk space on the system*/
+			"", /*uptime*/
+			"", /*current load*/
+		}
+		statusList[c.Peerlist[i]] = newStatus
+	}
+
 }
 
 func (handler *StatusHandler) HandleStatusMessage(msg *api.ResponseMessage, recvAddr *net.UDPAddr) {
