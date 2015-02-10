@@ -42,6 +42,7 @@ func main() {
 		log.Out.Printf("Starting http server")
 		go httpServer.CreateHttpServer()
 		statusHandler := handler.NewStatusHandler()
+		statusHandler.NewStatusList(cl) //initalize the PeerList
 		log.Out.Printf("Starting status receiver")
 		err = api.StatusReceiver(conn, statusHandler)
 
