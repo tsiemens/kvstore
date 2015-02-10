@@ -1,10 +1,10 @@
 {
-  "NotifyCount": 10,
-  "K": 8,
+  "NotifyCount": 2,
+  "K": 6,
   "StatusServer": "planetlab1.fit.vutbr.cz",
   "StatusServerPort": 6667,
   "StatusServerHttpPort": 3000,
-  "UpdateFrequency": 5000000000,
+  "UpdateFrequency": 10000000000,
   "DialTimeout": 10000000000,
   "NodeTimeout": 300000000000,
   "DefaultPortList": [
@@ -14,7 +14,7 @@
     "8888"
   ],
   "PeerList": [
-       "planetlab3.cs.uiuc.edu",
+      "planetlab3.cs.uiuc.edu",
       "planetlab-2.rml.ryerson.ca",
       "planetlab1.aub.edu.lb",
       "planetlab1.engr.ccny.cuny.edu",
@@ -167,7 +167,8 @@
       "planetlab6.cs.uiuc.edu",
       "planetlab2-buenosaires.lan.redclara.net",
       "planetlab-01.vt.nodes.planet-lab.org",
-      "pl1.6test.edu.cn"
+      "pl1.6test.edu.cn",
+      "planetlab1.fit.vutbr.cz"
   ]
 }
 

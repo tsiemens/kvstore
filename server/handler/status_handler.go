@@ -38,32 +38,45 @@ type DiskSpaceEntry struct {
 
 type StatusHandler struct {
 	StatusList map[string]*Status
+	HostIPMap  map[string]string
 }
 
 func NewStatusHandler() *StatusHandler {
 
 	statusList := make(map[string]*Status, 0)
+	hostIPMap := make(map[string]string, 0)
 	c := config.GetConfig()
 
 	for _, node := range c.PeerList {
-		var nodeStatus string
-		if util.IsHostReachable(node, config.GetConfig().DialTimeout, config.GetConfig().DefaultPortList) {
-			nodeStatus = UP
-		} else {
-			nodeStatus = OFFLINE
-		}
+		/*
+			var nodeStatus string
+			if util.IsHostReachable(node, config.GetConfig().DialTimeout, config.GetConfig().DefaultPortList) {
+				nodeStatus = UP
+			} else {
+				nodeStatus = OFFLINE
+			}
+		*/
 		newStatus := &Status{
-			nodeStatus,
+			OFFLINE,
 			time.Now(), /*time //note that this field will hold the time the list was initalized*/
 			"",         /*space used by the application*/
 			[]*DiskSpaceEntry{},
 			"", /*uptime*/
 			"", /*current load*/
 		}
-		statusList[node] = newStatus
+		ip, err := net.LookupIP(node)
+		if err != nil {
+			log.E.Println(err)
+		}
+		if len(ip) > 0 {
+			hostIPMap[ip[0].String()] = node
+			statusList[node] = newStatus
+		}
+
 	}
 	return &StatusHandler{
 		StatusList: statusList,
+		HostIPMap:  hostIPMap,
 	}
 }
 
@@ -79,22 +92,8 @@ func (handler *StatusHandler) HandleStatusMessage(msg *api.ResponseMessage, recv
 		strings.TrimSpace(data[3]),
 	}
 
-	peers, err := net.LookupAddr(recvAddr.IP.String())
-	if err != nil {
-		log.E.Println(err)
-	}
-
-	for _, peer := range peers {
-		// for some reason the return value has a . at the end
-		if len(peer) > 0 {
-			peer = peer[:len(peer)-1]
-		}
-		_, ok := handler.StatusList[peer]
-		if ok {
-			handler.StatusList[peer] = newStatus
-		}
-	}
-	handler.CheckNodeReach()
+	handler.StatusList[handler.HostIPMap[recvAddr.IP.String()]] = newStatus
+	//handler.CheckNodeReach()
 }
 
 func (handler *StatusHandler) CheckNodeReach() {
