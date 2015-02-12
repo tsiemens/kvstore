@@ -14,13 +14,14 @@ import (
 
 const (
 	UP             = "UP"
-	OFFLINE        = "Offline"
-	NOT_RESPONDING = "Not Responding"
+	OFFLINE        = "Host Offline"
+	NOT_RESPONDING = "Node Not Responding"
+	UNKNOWN        = "Unknown"
 )
 
 type Status struct {
 	Status           string
-	LastSeen         time.Time
+	LastSeen         *time.Time
 	ApplicationSpace string
 	DiskSpace        []*DiskSpaceEntry
 	Uptime           string
@@ -50,16 +51,16 @@ func NewStatusHandler() *StatusHandler {
 	for _, node := range c.PeerList {
 		/*
 			var nodeStatus string
-			if util.IsHostReachable(node, config.GetConfig().DialTimeout, config.GetConfig().DefaultPortList) {
+			if util.IsHostReachable(node, c.DialTimeout, c.DefaultPortList) {
 				nodeStatus = UP
 			} else {
 				nodeStatus = OFFLINE
 			}
 		*/
 		newStatus := &Status{
-			OFFLINE,
-			time.Now(), /*time //note that this field will hold the time the list was initalized*/
-			"",         /*space used by the application*/
+			UNKNOWN,
+			nil,
+			"", /*space used by the application*/
 			[]*DiskSpaceEntry{},
 			"", /*uptime*/
 			"", /*current load*/
@@ -70,10 +71,21 @@ func NewStatusHandler() *StatusHandler {
 		}
 		if len(ip) > 0 {
 			hostIPMap[ip[0].String()] = node
-			statusList[node] = newStatus
 		}
+		statusList[node] = newStatus
 
 	}
+
+	go func(c *config.Config, statusList map[string]*Status) {
+		for hostname, node := range statusList {
+			if util.IsHostReachable(hostname, c.DialTimeout, c.DefaultPortList) {
+				node.Status = UNKNOWN
+			} else {
+				node.Status = OFFLINE
+			}
+		}
+	}(c, statusList)
+
 	return &StatusHandler{
 		StatusList: statusList,
 		HostIPMap:  hostIPMap,
@@ -83,9 +95,10 @@ func NewStatusHandler() *StatusHandler {
 func (handler *StatusHandler) HandleStatusMessage(msg *api.ResponseMessage, recvAddr *net.UDPAddr) {
 	data := strings.Split(string(msg.Value), "\t\n\t\n")
 	//TODO - update old status instead of creating new status
+	t := time.Now()
 	newStatus := &Status{
 		UP,
-		time.Now(),
+		&t,
 		strings.TrimSpace(data[0]),
 		parseDiskSpace(strings.TrimSpace(data[1])),
 		strings.TrimSpace(data[2]),
@@ -93,20 +106,27 @@ func (handler *StatusHandler) HandleStatusMessage(msg *api.ResponseMessage, recv
 	}
 
 	handler.StatusList[handler.HostIPMap[recvAddr.IP.String()]] = newStatus
-	//handler.CheckNodeReach()
+	go handler.CheckNodeReach()
 }
 
 func (handler *StatusHandler) CheckNodeReach() {
-	for node, status := range handler.StatusList {
-		if time.Now().Sub(status.LastSeen) > config.GetConfig().NodeTimeout {
-			if status.Status == UP || status.Status == NOT_RESPONDING {
-				if util.IsHostReachable(node, config.GetConfig().DialTimeout, config.GetConfig().DefaultPortList) {
-					status.Status = NOT_RESPONDING
-				} else {
-					status.Status = OFFLINE
+	for {
+		now := time.Now()
+		for node, status := range handler.StatusList {
+			if status.LastSeen == nil {
+				continue
+			}
+			if time.Now().Sub(*status.LastSeen) > config.GetConfig().NodeTimeout {
+				if status.Status == UP || status.Status == NOT_RESPONDING {
+					if util.IsHostReachable(node, config.GetConfig().DialTimeout, config.GetConfig().DefaultPortList) {
+						status.Status = NOT_RESPONDING
+					} else {
+						status.Status = OFFLINE
+					}
 				}
 			}
 		}
+
 	}
 }
 
