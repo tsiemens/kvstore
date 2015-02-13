@@ -111,7 +111,7 @@ func (handler *StatusHandler) HandleStatusMessage(msg *api.ResponseMessage, recv
 
 func (handler *StatusHandler) CheckNodeReach() {
 	for {
-		now := time.Now()
+		//_ := time.Now()
 		for node, status := range handler.StatusList {
 			if status.LastSeen == nil {
 				continue
