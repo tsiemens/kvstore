@@ -12,50 +12,32 @@ const MaxMessageSize = 15000
 var initialTimeout = 100
 var retries = 3
 
-type requestMessageBuilder func(addr *net.UDPAddr) *RequestMessage
+type MessageBuilder func(addr *net.UDPAddr) Message
 
-/* Retrieves the value from the server at url,
- * using the kvstore protocol */
-func Get(url string, key [32]byte) ([]byte, error) {
-	return sendRecv(url, func(addr *net.UDPAddr) *RequestMessage {
-		return newRequestMessage(addr, CmdGet, key, make([]byte, 0, 0))
-	})
-}
-
-/* Sets the value on the server at url,
- * using the kvstore protocol */
-func Put(url string, key [32]byte, value []byte) error {
-	_, err := sendRecv(url, func(addr *net.UDPAddr) *RequestMessage {
-		return newRequestMessage(addr, CmdPut, key, value)
-	})
-	return err
-}
-
-/* Removes the value from the server at url,
- * using the kvstore protocol */
-func Remove(url string, key [32]byte) error {
-	_, err := sendRecv(url, func(addr *net.UDPAddr) *RequestMessage {
-		return newRequestMessage(addr, CmdRemove, key, make([]byte, 0, 0))
-	})
-	return err
-}
-
-func StatusUpdate(url string, key [32]byte) error {
+func StatusUpdate(url string) error {
 	log.D.Println("Sending status update to", url)
-	_, err := send(url, func(addr *net.UDPAddr) *RequestMessage {
-		return newRequestMessage(addr, CmdStatusUpdate, key, make([]byte, 0, 0))
+	err := Send(url, func(addr *net.UDPAddr) *RequestMessage {
+		return NewMessage(NewMessageUID(addr), CmdStatusUpdate)
 	})
-	return err
+	if err != nil {
+		return err
+	} else {
+		return nil
+	}
 }
 
 func AdhocUpdate(url string, key [32]byte, value []byte) error {
-	_, err := send(url, func(addr *net.UDPAddr) *RequestMessage {
+	err := Send(url, func(addr *net.UDPAddr) *RequestMessage {
 		return newRequestMessage(addr, CmdAdhocUpdate, key, value)
 	})
-	return err
+	if err != nil {
+		return err
+	} else {
+		return nil
+	}
 }
 
-func sendRecv(url string, buildMsg requestMessageBuilder) ([]byte, error) {
+func SendRecv(url string, buildMsg MessageBuilder) (Message, error) {
 	remoteAddr, err := net.ResolveUDPAddr("udp", url)
 	if err != nil {
 		return nil, err
@@ -81,7 +63,6 @@ func sendRecv(url string, buildMsg requestMessageBuilder) ([]byte, error) {
 	for tries := retries; tries > 0; tries-- {
 		// Send message/resend if timeout occurred
 		con.WriteTo(msgToSend.Bytes(), remoteAddr)
-		//log.D.Printf("Sent: [% x]\n", msgToSend.Bytes())
 		msg, err := receiver.recvMsg(timeout)
 		netErr = err
 		if netErr != nil {
@@ -91,10 +72,8 @@ func sendRecv(url string, buildMsg requestMessageBuilder) ([]byte, error) {
 				// Some other error occured, which we won't recover from
 				return nil, netErr
 			}
-		} else if msgErr := msg.Error(); msgErr != nil {
-			return nil, msgErr
 		} else {
-			return msg.Value, nil
+			return msg, nil
 		}
 	}
 
@@ -102,23 +81,22 @@ func sendRecv(url string, buildMsg requestMessageBuilder) ([]byte, error) {
 	return nil, netErr
 }
 
-func send(url string, buildMsg requestMessageBuilder) ([]byte, error) {
+func Send(url string, buildMsg MessageBuilder) error {
 	remoteAddr, err := net.ResolveUDPAddr("udp", url)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	con, localAddr, err := util.CreateUDPSocket(remoteAddr.IP.IsLoopback(), 0)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer con.Close()
 
 	msgToSend := buildMsg(localAddr)
 	con.WriteTo(msgToSend.Bytes(), remoteAddr)
-	//log.D.Printf("Sent: [% x]\n", msgToSend.Bytes())
 	// TODO return proper errors
-	return nil, nil
+	return nil
 }
 
 type protocolReceiver struct {

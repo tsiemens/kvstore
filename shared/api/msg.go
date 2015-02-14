@@ -4,15 +4,32 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	//	"math/rand"
+	"math/rand"
 	"net"
-	//	"fmt"
 )
 
 import "github.com/tsiemens/kvstore/shared/log"
 import "github.com/tsiemens/kvstore/shared/util"
 
-//var myRand = rand.New(rand.NewSource(util.UnixMilliTimestamp()))
+var myRand = rand.New(rand.NewSource(util.UnixMilliTimestamp()))
+
+// Base Command codes that the server will expect to receive
+const CmdPut = 0x01
+const CmdGet = 0x02
+const CmdRemove = 0x03
+const CmdStatusUpdate = 0x04
+const CmdAdhocUpdate = 0x05
+
+// Response codes that can be sent back to the client
+const RespOk = 0x00
+const RespInvalidKey = 0x01
+const RespOutOfSpace = 0x02
+const RespSysOverload = 0x03
+const RespInternalError = 0x04
+const RespUnknownCommand = 0x05
+const RespStatusUpdateFail = 0x06
+const RespStatusUpdateOK = 0x07
+const RespAdhocUpdateOK = 0x08
 
 type BaseDgram struct {
 	uid     [16]byte
@@ -40,6 +57,8 @@ type Message interface {
 	Bytes() []byte
 }
 
+type MessageHandler func(m Message) error
+
 func (d *BaseDgram) UID() [16]byte {
 	return d.uid
 }
@@ -48,14 +67,14 @@ func (d *BaseDgram) Command() byte {
 	return d.command
 }
 
-func newMessage(msgUID [16]byte, command byte) Message {
+func NewMessage(msgUID [16]byte, command byte) Message {
 	return &BaseDgram{
 		uid:     msgUID,
 		command: command,
 	}
 }
 
-func newKeyDgram(msgUID [16]byte, command byte, key [32]byte) *KeyDgram {
+func NewKeyDgram(msgUID [16]byte, command byte, key [32]byte) *KeyDgram {
 	return &KeyDgram{
 		BaseDgram: BaseDgram{
 			uid:     msgUID,
@@ -65,7 +84,7 @@ func newKeyDgram(msgUID [16]byte, command byte, key [32]byte) *KeyDgram {
 	}
 }
 
-func newKeyValueDgram(msgUID [16]byte, command byte,
+func NewKeyValueDgram(msgUID [16]byte, command byte,
 	key [32]byte, value []byte) *KeyValueDgram {
 	return &KeyValueDgram{
 		KeyDgram: KeyDgram{
@@ -79,7 +98,7 @@ func newKeyValueDgram(msgUID [16]byte, command byte,
 	}
 }
 
-func newValueDgram(msgUID [16]byte, command byte, value []byte) *ValueDgram {
+func NewValueDgram(msgUID [16]byte, command byte, value []byte) *ValueDgram {
 	return &ValueDgram{
 		BaseDgram: BaseDgram{
 			uid:     msgUID,
@@ -91,7 +110,7 @@ func newValueDgram(msgUID [16]byte, command byte, value []byte) *ValueDgram {
 
 // Returns the 16 byte Unique ID
 // Is of form [ip [4]byte | port int16 | rand int16 | timestamp int64]
-func xnewUID(addr *net.UDPAddr) [16]byte {
+func NewMessageUID(addr *net.UDPAddr) [16]byte {
 	buf := new(bytes.Buffer)
 	if binary.Write(buf, binary.BigEndian, addr.IP.To4()) != nil ||
 		binary.Write(buf, binary.LittleEndian, int16(addr.Port)) != nil ||

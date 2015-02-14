@@ -3,6 +3,7 @@ package commands
 import "errors"
 import "encoding/hex"
 import "github.com/tsiemens/kvstore/shared/api"
+import clientapi "github.com/tsiemens/kvstore/client/api"
 import "github.com/tsiemens/kvstore/shared/log"
 import "crypto/rand"
 
@@ -71,7 +72,7 @@ func (c *GetCommand) Run(url string, args []string) error {
 		return err
 	}
 
-	val, err := api.Get(url, key)
+	val, err := clientapi.Get(url, key)
 	if err != nil {
 		return err
 	}
@@ -146,7 +147,7 @@ func (c *RemoveCommand) Run(url string, args []string) error {
 		return err
 	}
 
-	err = api.Remove(url, key)
+	err = clientapi.Remove(url, key)
 	if err != nil {
 		return err
 	}
@@ -158,6 +159,7 @@ func (c *RemoveCommand) Run(url string, args []string) error {
 func PrintCommands() {
 	printCommandHelp(newGetCommand())
 	printCommandHelp(newPutCommand())
+	printCommandHelp(newRemoveCommand())
 }
 
 func printCommandHelp(cmd Command) {
