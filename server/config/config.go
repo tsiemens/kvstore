@@ -3,7 +3,6 @@ package config
 import (
 	"encoding/json"
 	"github.com/tsiemens/kvstore/shared/log"
-	"github.com/tsiemens/kvstore/shared/util"
 	"net"
 	"os"
 	"strconv"
@@ -20,7 +19,7 @@ type Config struct {
 	NotifyCount          int          // number of nodes notified using the gossip protocol
 	K                    int          // K factor in gossip protocol
 	PeerList             []string     // hostnames of all other nodes in network
-	DefaultPortList      []string     // default ports to communicate on
+	DefaultLocalhostPort int          // default ports to communicate on
 	StatusServer         string       // hostname of status server
 	StatusServerAddr     *net.UDPAddr // addr of status server
 	StatusServerPort     int
@@ -72,22 +71,6 @@ func Init(configPath string, useloopback bool) {
 	}
 	config.StatusServerAddr = addr
 	log.D.Println(config.PeerList)
-}
-
-func (c *Config) GetRandAddr() string {
-	if c.UseLoopback {
-		basePort, _ := strconv.Atoi(c.DefaultPortList[0])
-		port := util.Rand.Intn(len(c.PeerList)) + basePort
-		addr := strconv.Itoa(port)
-		return "localhost:" + addr
-	}
-	randHost := c.PeerList[util.Rand.Intn(len(c.PeerList))]
-	// prevent host from picking itself
-	for randHost == c.Hostname {
-		randHost = c.PeerList[util.Rand.Intn(len(c.PeerList))]
-	}
-
-	return randHost + ":" + c.DefaultPortList[0]
 }
 
 func GetConfig() *Config {

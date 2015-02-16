@@ -50,14 +50,21 @@ type TestPeer struct {
 	Addr     net.UDPAddr
 }
 
-func SendMembershipMsg(conn *net.UDPConn, addr *net.UDPAddr, myNodeid [32]byte, peers map[store.Key]*node.Peer) error {
+func SendMembershipMsg(conn *net.UDPConn, addr *net.UDPAddr, myNodeid [32]byte,
+	peers map[store.Key]*node.Peer, isReply bool) error {
 	//testpeers := map[store.Key]TestPeer{}
 	peerdata, err := json.Marshal(newPeerList(peers))
 	if err != nil {
 		return err
 	}
 	return api.Send(conn, addr.String(), func(addr *net.UDPAddr) api.Message {
+		var code byte
+		if isReply { // I really wish go had ternary operators -_-
+			code = api.CmdMembership
+		} else {
+			code = api.CmdMembershipResponse
+		}
 		return api.NewKeyValueDgram(api.NewMessageUID(addr),
-			api.CmdMembership, node.GetProcessNode().ID, peerdata)
+			code, node.GetProcessNode().ID, peerdata)
 	})
 }

@@ -10,10 +10,12 @@ import (
 	"github.com/tsiemens/kvstore/shared/log"
 	"github.com/tsiemens/kvstore/shared/util"
 	"net"
+	"strconv"
 	"time"
 )
 
 const timeErr = time.Millisecond * 5
+const TimeTillMemberDrop = time.Minute * 5
 
 // Node represents this machine, as one in a cluster of nodes.
 type Node struct {
@@ -38,6 +40,8 @@ func Init(localAddr *net.UDPAddr, conn *net.UDPConn) {
 		Lock:       util.NewSemaphore(),
 		Conn:       conn,
 	}
+
+	log.I.Println("Node initialized with ID: " + node.ID.String())
 }
 
 func GetProcessNode() *Node {
@@ -55,7 +59,7 @@ func wellKnownPeers() []*net.UDPAddr {
 	conf := config.GetConfig()
 	myAddr := GetProcessNode().Conn.LocalAddr().(*net.UDPAddr)
 	if conf.UseLoopback {
-		p, _ := net.ResolveUDPAddr("udp", "localhost:"+conf.DefaultPortList[0])
+		p, _ := net.ResolveUDPAddr("udp", "localhost:"+strconv.Itoa(conf.DefaultLocalhostPort))
 		if util.AddrsEqual(myAddr, p) {
 			return []*net.UDPAddr{}
 		} else {
@@ -64,9 +68,9 @@ func wellKnownPeers() []*net.UDPAddr {
 	} else {
 		knownPeers := make([]*net.UDPAddr, 0, len(conf.PeerList))
 		for _, peer := range conf.PeerList {
-			p, _ := net.ResolveUDPAddr("udp", peer+":"+conf.DefaultPortList[0]) // TODO this conf list should be the port and host
-			if !util.AddrsEqual(myAddr, p) {
-				knownPeers = append(knownPeers, p)
+			peerAddr, _ := net.ResolveUDPAddr("udp", peer)
+			if !util.AddrsEqual(myAddr, peerAddr) {
+				knownPeers = append(knownPeers, peerAddr)
 			}
 		}
 		return knownPeers
@@ -109,35 +113,60 @@ func (node *Node) RandomPeer() (*Peer, *store.Key) {
 	return nil, nil
 }
 
+func (node *Node) CleanupKnownNodes() {
+	now := time.Now()
+	for key, peer := range node.KnownPeers {
+		if peer.LastSeen.Add(TimeTillMemberDrop).Before(now) {
+			log.I.Printf("Peer %s is expired\n", key.String())
+			delete(node.KnownPeers, key)
+		}
+	}
+}
+
 func (node *Node) UpdatePeers(peers map[store.Key]*Peer, sendingPeerId store.Key, sendingAddr *net.UDPAddr) {
 	node.Lock.Lock()
 	defer node.Lock.Unlock()
+	log.I.Println("Updating peers...")
 	for key, remotePeerVal := range peers {
-		if _, ok := node.KnownPeers[key]; ok {
-			if time.Now().Add(timeErr).Before(remotePeerVal.LastSeen) {
+		if key != node.ID {
+			log.I.Println("updating " + key.String())
+			if _, ok := node.KnownPeers[key]; ok {
+				if time.Now().Add(timeErr).Before(remotePeerVal.LastSeen) {
+					node.KnownPeers[key] = remotePeerVal
+				}
+			} else {
 				node.KnownPeers[key] = remotePeerVal
 			}
 		} else {
-			node.KnownPeers[key] = remotePeerVal
+			log.I.Println("ingnoring my id")
 		}
+	}
 
-		var sendingPeer *Peer
-		if peer, ok := node.KnownPeers[sendingPeerId]; ok {
-			sendingPeer = peer
-		} else {
-			sendingPeer = &Peer{}
-			node.KnownPeers[sendingPeerId] = sendingPeer
-		}
-		sendingPeer.LastSeen = time.Now()
-		sendingPeer.Online = true
-		sendingPeer.Addr = sendingAddr
+	var sendingPeer *Peer
+	if peer, ok := node.KnownPeers[sendingPeerId]; ok {
+		sendingPeer = peer
+	} else {
+		sendingPeer = &Peer{}
+		node.KnownPeers[sendingPeerId] = sendingPeer
+	}
+	sendingPeer.LastSeen = time.Now()
+	sendingPeer.Online = true
+	sendingPeer.Addr = sendingAddr
+
+	node.CleanupKnownNodes()
+	log.I.Println("Done.")
+}
+
+func (n *Node) SetPeerOffline(peerId store.Key) {
+	if peer, ok := node.KnownPeers[peerId]; ok {
+		peer.Online = false
 	}
 }
 
 func PeerListString(peers map[store.Key]*Peer) string {
 	s := ""
 	for key, peer := range peers {
-		s += fmt.Sprintf("	%s: %s, online:%d, lastseen:%s",
+		s += fmt.Sprintf("	%s: %s, online:%v, lastseen:%s\n",
 			key.String(), peer.Addr.String(), peer.Online,
 			peer.LastSeen.String())
 	}

@@ -4,7 +4,6 @@ import (
 	"github.com/tsiemens/kvstore/server/config"
 	"github.com/tsiemens/kvstore/shared/api"
 	"github.com/tsiemens/kvstore/shared/log"
-	"github.com/tsiemens/kvstore/shared/util"
 	"html/template"
 	"net"
 	"net/http"
@@ -49,14 +48,6 @@ func NewStatusHandler() *StatusHandler {
 	c := config.GetConfig()
 
 	for _, node := range c.PeerList {
-		/*
-			var nodeStatus string
-			if util.IsHostReachable(node, c.DialTimeout, c.DefaultPortList) {
-				nodeStatus = UP
-			} else {
-				nodeStatus = OFFLINE
-			}
-		*/
 		newStatus := &Status{
 			UNKNOWN,
 			nil,
@@ -75,17 +66,17 @@ func NewStatusHandler() *StatusHandler {
 		statusList[node] = newStatus
 
 	}
-
-	go func(c *config.Config, statusList map[string]*Status) {
-		for hostname, node := range statusList {
-			if util.IsHostReachable(hostname, c.DialTimeout, c.DefaultPortList) {
-				node.Status = UNKNOWN
-			} else {
-				node.Status = OFFLINE
+	/*
+		go func(c *config.Config, statusList map[string]*Status) {
+			for hostname, node := range statusList {
+				if util.IsHostReachable(hostname, c.DialTimeout, c.DefaultPortList) {
+					node.Status = UNKNOWN
+				} else {
+					node.Status = OFFLINE
+				}
 			}
-		}
-	}(c, statusList)
-
+		}(c, statusList)
+	*/
 	return &StatusHandler{
 		StatusList: statusList,
 		HostIPMap:  hostIPMap,
@@ -107,9 +98,10 @@ func (handler *StatusHandler) HandleStatusMessage(msg api.Message, recvAddr *net
 	}
 
 	handler.StatusList[handler.HostIPMap[recvAddr.IP.String()]] = newStatus
-	go handler.CheckNodeReach()
+	//	go handler.CheckNodeReach()
 }
 
+/*
 func (handler *StatusHandler) CheckNodeReach() {
 	for {
 		//_ := time.Now()
@@ -130,7 +122,7 @@ func (handler *StatusHandler) CheckNodeReach() {
 
 	}
 }
-
+*/
 func (handler *StatusHandler) ServeHttp(writer http.ResponseWriter, req *http.Request) {
 
 	t := template.New("status.html")

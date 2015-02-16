@@ -1,12 +1,14 @@
 package handler
 
-import "net"
-
-import "github.com/tsiemens/kvstore/shared/util"
-import "github.com/tsiemens/kvstore/shared/api"
-import "github.com/tsiemens/kvstore/shared/log"
-import "github.com/tsiemens/kvstore/server/store"
-import "github.com/tsiemens/kvstore/server/protocol"
+import (
+	"fmt"
+	"github.com/tsiemens/kvstore/server/protocol"
+	"github.com/tsiemens/kvstore/server/store"
+	"github.com/tsiemens/kvstore/shared/api"
+	"github.com/tsiemens/kvstore/shared/log"
+	"github.com/tsiemens/kvstore/shared/util"
+	"net"
+)
 
 type CmdHandler func(mh *MessageHandler, msg api.Message,
 	recvAddr *net.UDPAddr)
@@ -23,12 +25,13 @@ type MessageHandler struct {
 
 func NewDefaultCmdHandlerSet() map[byte]CmdHandler {
 	return map[byte]CmdHandler{
-		api.CmdPut:          HandlePut,
-		api.CmdGet:          HandleGet,
-		api.CmdRemove:       HandleRemove,
-		api.CmdStatusUpdate: HandleStatusUpdate,
-		api.CmdAdhocUpdate:  HandleAdhocUpdate,
-		api.CmdMembership:   HandleMembershipMsg,
+		api.CmdPut:                HandlePut,
+		api.CmdGet:                HandleGet,
+		api.CmdRemove:             HandleRemove,
+		api.CmdStatusUpdate:       HandleStatusUpdate,
+		api.CmdAdhocUpdate:        HandleAdhocUpdate,
+		api.CmdMembership:         HandleMembershipMsg,
+		api.CmdMembershipResponse: HandleMembershipResponse,
 	}
 }
 
@@ -42,6 +45,7 @@ func NewMessageHandler(store *store.Store, conn *net.UDPConn,
 	return &MessageHandler{
 		store:             store,
 		Conn:              conn,
+		cmdHandlers:       cmdHandlers,
 		PacketLossPercent: lossPercent % 101,
 		shouldGossip:      true,
 	}
@@ -60,7 +64,7 @@ func (handler *MessageHandler) HandleMessage(msg api.Message, recvAddr *net.UDPA
 	if cmdHandler, ok := handler.cmdHandlers[msg.Command()]; ok {
 		cmdHandler(handler, msg, recvAddr)
 	} else {
-		log.D.Println("Received unknown command " + string(msg.Command()))
+		log.D.Println(fmt.Sprintf("No handler for command 0x%x", msg.Command()))
 		protocol.ReplyToUnknownCommand(handler.Conn, recvAddr, msg)
 	}
 }

@@ -25,14 +25,11 @@ func MembershipUpdateLoop() {
 	for {
 		randPeer, peerId := thisNode.RandomPeer()
 		if randPeer != nil {
-			err := serverapi.SendMembershipMsg(thisNode.Conn, randPeer.Addr, thisNode.ID,
-				thisNode.KnownPeers)
+			err := serverapi.SendMembershipMsg(thisNode.Conn, randPeer.Addr,
+				thisNode.ID, thisNode.KnownPeers, false)
 			if err != nil {
 				log.E.Println(err)
-				if peerId != nil {
-					randPeer.Online = false
-					thisNode.KnownPeers[*peerId] = randPeer
-				}
+				thisNode.SetPeerOffline(*peerId)
 			}
 		}
 		log.D.Printf("Currently known peers: [\n%s\n]\n",

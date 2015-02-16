@@ -106,6 +106,15 @@ func HandleAdhocUpdate(handler *MessageHandler, msg api.Message, recvAddr *net.U
 }
 
 func HandleMembershipMsg(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
+	handleMembership(handler, msg, recvAddr, true)
+}
+
+func HandleMembershipResponse(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
+	handleMembership(handler, msg, recvAddr, false)
+}
+
+func handleMembership(handler *MessageHandler, msg api.Message,
+	recvAddr *net.UDPAddr, reply bool) {
 	if keyValMsg, ok := msg.(*api.KeyValueDgram); ok {
 		nodeId := keyValMsg.Key
 		peers := &serverapi.PeerList{}
@@ -115,8 +124,13 @@ func HandleMembershipMsg(handler *MessageHandler, msg api.Message, recvAddr *net
 		} else {
 			thisNode := node.GetProcessNode()
 			thisNode.UpdatePeers(peers.PointerMap(), nodeId, recvAddr)
-			serverapi.SendMembershipMsg(handler.Conn, recvAddr, thisNode.ID,
-				thisNode.KnownPeers)
+			if reply {
+				err = serverapi.SendMembershipMsg(handler.Conn, recvAddr,
+					thisNode.ID, thisNode.KnownPeers, true)
+				if err != nil {
+					thisNode.SetPeerOffline(nodeId)
+				}
+			}
 			log.D.Printf("Currently known peers: [\n%s\n]\n",
 				node.PeerListString(thisNode.KnownPeers))
 		}

@@ -18,6 +18,7 @@ const CmdRemove = 0x03
 const CmdStatusUpdate = 0x21
 const CmdAdhocUpdate = 0x22
 const CmdMembership = 0x23
+const CmdMembershipResponse = 0x24
 
 // Response codes that can be sent back to the client
 const RespOk = 0x00
@@ -172,7 +173,7 @@ func ParseMessage(dgram []byte,
 	if parser, ok := parserMap[command]; ok {
 		return parser(byteArray16(uid), command, dgram[17:])
 	} else {
-		return nil, errors.New(fmt.Sprintf("Unrecognized command 0x%x", command))
+		return nil, errors.New(fmt.Sprintf("Could not parse unrecognized command 0x%x", command))
 	}
 }
 
