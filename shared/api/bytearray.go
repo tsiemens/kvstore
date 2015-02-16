@@ -2,6 +2,7 @@ package api
 
 import "errors"
 import "crypto/rand"
+import "encoding/hex"
 
 // Utilities for creating byte arrays
 // (useful in fixed size portions of messages)
@@ -26,6 +27,20 @@ func NewRandKey() ([32]byte, error) {
 		return [32]byte{}, err
 	}
 	return key, nil
+}
+
+func KeyHex(key [32]byte) string {
+	return hex.EncodeToString(key[:])
+}
+
+func KeyFromHex(keystring string) (key [32]byte, err error) {
+	keyslice, err := hex.DecodeString(keystring)
+	if err != nil {
+		return
+	}
+
+	key, err = NewKey(keyslice)
+	return
 }
 
 // slice must be at most 32 bytes.

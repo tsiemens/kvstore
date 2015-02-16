@@ -1,17 +1,19 @@
 package main
 
-import "flag"
-import "os"
-import "io/ioutil"
-import "strconv"
+import (
+	"flag"
+	"io/ioutil"
+	"os"
 
-import "github.com/tsiemens/kvstore/shared/api"
-import "github.com/tsiemens/kvstore/shared/log"
-import "github.com/tsiemens/kvstore/shared/util"
-import "github.com/tsiemens/kvstore/server/handler"
-import "github.com/tsiemens/kvstore/server/store"
-import "github.com/tsiemens/kvstore/server/config"
-import "github.com/tsiemens/kvstore/server/httpServer"
+	"github.com/tsiemens/kvstore/server/config"
+	"github.com/tsiemens/kvstore/server/handler"
+	"github.com/tsiemens/kvstore/server/loop"
+	"github.com/tsiemens/kvstore/server/node"
+	"github.com/tsiemens/kvstore/server/protocol"
+	"github.com/tsiemens/kvstore/server/store"
+	"github.com/tsiemens/kvstore/shared/log"
+	"github.com/tsiemens/kvstore/shared/util"
+)
 
 func main() {
 	log.Init(ioutil.Discard, os.Stdout, os.Stderr)
@@ -21,8 +23,6 @@ func main() {
 		log.Init(os.Stdout, os.Stdout, os.Stderr)
 	}
 	config.Init(cl.ConfigPath, cl.UseLoopback)
-
-	store := store.New()
 
 	var port int
 	if cl.StatusServer {
@@ -41,14 +41,18 @@ func main() {
 
 	if cl.StatusServer {
 		log.Out.Printf("Starting http server")
-		statusHandler := handler.NewStatusHandler()
-		go httpServer.CreateHttpServer(strconv.Itoa(config.GetConfig().StatusServerHttpPort), statusHandler)
+		log.E.Panic("Status server temporarily disabled!")
+		//	statusHandler := handler.NewStatusHandler()
+		//	go httpServer.CreateHttpServer(strconv.Itoa(config.GetConfig().StatusServerHttpPort), statusHandler)
 		log.Out.Printf("Starting status receiver")
-		err = api.StatusReceiver(conn, statusHandler)
+		//	err = api.StatusReceiver(conn, statusHandler)
 
 	} else {
-		msgHandler := handler.NewMessageHandler(store, conn, cl.PacketLossPct)
-		err = api.LoopReceiver(conn, msgHandler)
+		store := store.New()
+		node.Init(localAddr, conn)
+		loop.GoAll()
+		msgHandler := handler.NewDefaultMessageHandler(store, conn, cl.PacketLossPct)
+		err = protocol.LoopReceiver(conn, msgHandler)
 	}
 	log.E.Fatal(err)
 }

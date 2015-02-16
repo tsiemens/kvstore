@@ -4,21 +4,20 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"math/rand"
+	"fmt"
 	"net"
 )
 
 import "github.com/tsiemens/kvstore/shared/log"
 import "github.com/tsiemens/kvstore/shared/util"
 
-var myRand = rand.New(rand.NewSource(util.UnixMilliTimestamp()))
-
 // Base Command codes that the server will expect to receive
 const CmdPut = 0x01
 const CmdGet = 0x02
 const CmdRemove = 0x03
-const CmdStatusUpdate = 0x04
-const CmdAdhocUpdate = 0x05
+const CmdStatusUpdate = 0x21
+const CmdAdhocUpdate = 0x22
+const CmdMembership = 0x23
 
 // Response codes that can be sent back to the client
 const RespOk = 0x00
@@ -57,8 +56,6 @@ type Message interface {
 	Bytes() []byte
 }
 
-type MessageHandler func(m Message) error
-
 func (d *BaseDgram) UID() [16]byte {
 	return d.uid
 }
@@ -67,7 +64,7 @@ func (d *BaseDgram) Command() byte {
 	return d.command
 }
 
-func NewMessage(msgUID [16]byte, command byte) Message {
+func NewBaseDgram(msgUID [16]byte, command byte) Message {
 	return &BaseDgram{
 		uid:     msgUID,
 		command: command,
@@ -114,7 +111,7 @@ func NewMessageUID(addr *net.UDPAddr) [16]byte {
 	buf := new(bytes.Buffer)
 	if binary.Write(buf, binary.BigEndian, addr.IP.To4()) != nil ||
 		binary.Write(buf, binary.LittleEndian, int16(addr.Port)) != nil ||
-		binary.Write(buf, binary.LittleEndian, int16(myRand.Int())) != nil ||
+		binary.Write(buf, binary.LittleEndian, int16(util.Rand.Int())) != nil ||
 		binary.Write(buf, binary.LittleEndian, util.UnixMilliTimestamp()) != nil {
 		log.E.Panic("binary.Write failed!")
 	}
@@ -175,12 +172,12 @@ func ParseMessage(dgram []byte,
 	if parser, ok := parserMap[command]; ok {
 		return parser(byteArray16(uid), command, dgram[17:])
 	} else {
-		return nil, errors.New("Unrecognized command " + string(command))
+		return nil, errors.New(fmt.Sprintf("Unrecognized command 0x%x", command))
 	}
 }
 
 func ParseBaseDgram(uid [16]byte, cmd byte, payload []byte) (Message, error) {
-	return newMessage(uid, cmd), nil
+	return NewBaseDgram(uid, cmd), nil
 }
 
 func parseKey(b []byte) ([32]byte, error) {
@@ -201,7 +198,7 @@ func ParseKeyDgram(uid [16]byte, cmd byte, payload []byte) (Message, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newKeyDgram(uid, cmd, key), nil
+	return NewKeyDgram(uid, cmd, key), nil
 }
 
 func parseMultiLengthValue(b []byte) ([]byte, error) {
@@ -234,7 +231,7 @@ func ParseKeyValueDgram(uid [16]byte, cmd byte, payload []byte) (Message, error)
 	if err != nil {
 		return nil, err
 	}
-	return newKeyValueDgram(uid, cmd, key, value), nil
+	return NewKeyValueDgram(uid, cmd, key, value), nil
 }
 
 func ParseValueDgram(uid [16]byte, cmd byte, payload []byte) (Message, error) {
@@ -242,5 +239,5 @@ func ParseValueDgram(uid [16]byte, cmd byte, payload []byte) (Message, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newValueDgram(uid, cmd, value), nil
+	return NewValueDgram(uid, cmd, value), nil
 }

@@ -92,8 +92,9 @@ func NewStatusHandler() *StatusHandler {
 	}
 }
 
-func (handler *StatusHandler) HandleStatusMessage(msg *api.ResponseMessage, recvAddr *net.UDPAddr) {
-	data := strings.Split(string(msg.Value), "\t\n\t\n")
+func (handler *StatusHandler) HandleStatusMessage(msg api.Message, recvAddr *net.UDPAddr) {
+	kvMsg := msg.(*api.KeyValueDgram)
+	data := strings.Split(string(kvMsg.Value), "\t\n\t\n")
 	//TODO - update old status instead of creating new status
 	t := time.Now()
 	newStatus := &Status{

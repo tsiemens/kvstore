@@ -1,7 +1,6 @@
 package commands
 
 import "errors"
-import "encoding/hex"
 import "github.com/tsiemens/kvstore/shared/api"
 import clientapi "github.com/tsiemens/kvstore/client/api"
 import "github.com/tsiemens/kvstore/shared/log"
@@ -82,16 +81,6 @@ func (c *GetCommand) Run(url string, args []string) error {
 	return nil
 }
 
-func keyFromHex(keystring string) (key [32]byte, err error) {
-	keyslice, err := hex.DecodeString(keystring)
-	if err != nil {
-		return
-	}
-
-	key, err = api.NewKey(keyslice)
-	return
-}
-
 type PutCommand struct {
 	BaseCommand
 }
@@ -110,7 +99,7 @@ func (c *PutCommand) Run(url string, args []string) error {
 		return errors.New("put requires KEY and VALUE arguments")
 	}
 
-	key, err := keyFromHex(args[0])
+	key, err := api.KeyFromHex(args[0])
 	if err != nil {
 		return err
 	}
