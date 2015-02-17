@@ -66,7 +66,7 @@ func (c *GetCommand) Run(url string, args []string) error {
 		return errors.New("get requires KEY argument")
 	}
 
-	key, err := keyFromHex(args[0])
+	key, err := api.KeyFromHex(args[0])
 	if err != nil {
 		return err
 	}
@@ -105,7 +105,7 @@ func (c *PutCommand) Run(url string, args []string) error {
 	}
 
 	value := args[1]
-	err = api.Put(url, key, []byte(value))
+	err = clientapi.Put(url, key, []byte(value))
 	if err != nil {
 		return err
 	}
@@ -131,7 +131,7 @@ func (c *RemoveCommand) Run(url string, args []string) error {
 		return errors.New("remove requires KEY argument")
 	}
 
-	key, err := keyFromHex(args[0])
+	key, err := api.KeyFromHex(args[0])
 	if err != nil {
 		return err
 	}
@@ -183,7 +183,7 @@ func (c *StatusUpdateCommand) Run(url string, args []string) error {
 		return err
 	}
 
-	err = api.StatusUpdate(url, key)
+	err = api.StatusUpdate(nil, url, key)
 	if err != nil {
 		return err
 	}
@@ -219,7 +219,7 @@ func (c *AdhocUpdateCommand) Run(url string, args []string) error {
 	}
 
 	value := args[0]
-	err = api.AdhocUpdate(url, key, []byte(value))
+	err = api.AdhocUpdate(nil, url, key, []byte(value))
 	if err != nil {
 		return err
 	}

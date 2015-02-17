@@ -22,26 +22,24 @@ func ReplyToGet(conn *net.UDPConn, recvAddr *net.UDPAddr,
 
 func ReplyToPut(conn *net.UDPConn, recvAddr *net.UDPAddr,
 	requestMsg api.Message, success bool) {
-	var respCode byte
+	var reply api.Message
 	if success {
-		respCode = api.RespOk
+		reply = api.NewValueDgram(requestMsg.UID(), api.RespOk, make([]byte, 0, 0))
 	} else {
-		respCode = api.RespInternalError
+		reply = api.NewBaseDgram(requestMsg.UID(), api.RespInvalidKey)
 	}
-	conn.WriteTo(api.NewBaseDgram(requestMsg.UID(), respCode).Bytes(),
-		recvAddr)
+	conn.WriteTo(reply.Bytes(), recvAddr)
 }
 
 func ReplyToRemove(conn *net.UDPConn, recvAddr *net.UDPAddr,
 	requestMsg api.Message, success bool) {
-	var respCode byte
+	var reply api.Message
 	if success {
-		respCode = api.RespOk
+		reply = api.NewValueDgram(requestMsg.UID(), api.RespOk, make([]byte, 0, 0))
 	} else {
-		respCode = api.RespInvalidKey
+		reply = api.NewBaseDgram(requestMsg.UID(), api.RespInvalidKey)
 	}
-	conn.WriteTo(api.NewBaseDgram(requestMsg.UID(), respCode).Bytes(),
-		recvAddr)
+	conn.WriteTo(reply.Bytes(), recvAddr)
 }
 
 func ReplyToStatusUpdateServer(conn *net.UDPConn, recvAddr *net.UDPAddr,
