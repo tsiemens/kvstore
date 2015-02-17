@@ -1,8 +1,8 @@
 package loop
 
 import (
-	serverapi "github.com/tsiemens/kvstore/server/api"
 	"github.com/tsiemens/kvstore/server/node"
+	"github.com/tsiemens/kvstore/server/protocol"
 	"github.com/tsiemens/kvstore/shared/log"
 	"time"
 )
@@ -25,7 +25,7 @@ func MembershipUpdateLoop() {
 	for {
 		randPeer, peerId := thisNode.RandomPeer()
 		if randPeer != nil {
-			err := serverapi.SendMembershipMsg(thisNode.Conn, randPeer.Addr,
+			err := protocol.SendMembershipMsg(thisNode.Conn, randPeer.Addr,
 				thisNode.ID, thisNode.KnownPeers, false)
 			if err != nil {
 				log.E.Println(err)

@@ -1,7 +1,13 @@
 package protocol
 
-import "net"
-import "github.com/tsiemens/kvstore/shared/api"
+import (
+	"encoding/json"
+	"github.com/tsiemens/kvstore/server/node"
+	"github.com/tsiemens/kvstore/server/store"
+	"github.com/tsiemens/kvstore/shared/api"
+	"net"
+	"time"
+)
 
 func ReplyToGet(conn *net.UDPConn, recvAddr *net.UDPAddr,
 	requestMsg api.Message, value []byte) {
@@ -63,6 +69,28 @@ func ReplyToStatusUpdateServer(conn *net.UDPConn, recvAddr *net.UDPAddr,
 	conn.WriteTo(api.NewValueDgram(requestMsg.UID(), respCode,
 		statusResult).Bytes(),
 		recvAddr)
+}
+
+func ReplyToMembershipQuery(conn *net.UDPConn, recvAddr *net.UDPAddr,
+	requestMsg api.Message, myNodeId [32]byte,
+	peers map[store.Key]*node.Peer) error {
+
+	peerList := newPeerList(peers)
+	// Append this node to list
+	peerList.Peers[api.KeyHex(store.Key(myNodeId))] = node.Peer{
+		Online:   true,
+		Addr:     conn.LocalAddr().(*net.UDPAddr),
+		LastSeen: time.Now(),
+	}
+
+	peerdata, err := json.Marshal(peerList)
+	if err != nil {
+		return err
+	}
+	conn.WriteTo(
+		api.NewValueDgram(requestMsg.UID(), api.RespOk, peerdata).Bytes(),
+		recvAddr)
+	return nil
 }
 
 func NotifyStatusUpdate(conn *net.UDPConn, recvAddr *net.UDPAddr,

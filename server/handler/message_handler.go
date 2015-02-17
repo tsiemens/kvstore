@@ -15,7 +15,6 @@ type CmdHandler func(mh *MessageHandler, msg api.Message,
 
 // Implements protocol.MessageHandler (to avoid import loops)
 type MessageHandler struct {
-	store             *store.Store
 	Conn              *net.UDPConn
 	cmdHandlers       map[byte]CmdHandler
 	PacketLossPercent int
@@ -32,18 +31,18 @@ func NewDefaultCmdHandlerSet() map[byte]CmdHandler {
 		api.CmdAdhocUpdate:        HandleAdhocUpdate,
 		api.CmdMembership:         HandleMembershipMsg,
 		api.CmdMembershipResponse: HandleMembershipResponse,
+		api.CmdMembershipQuery:    HandleMembershipQuery,
 	}
 }
 
-func NewDefaultMessageHandler(store *store.Store, conn *net.UDPConn, lossPercent int) *MessageHandler {
-	return NewMessageHandler(store, conn,
+func NewDefaultMessageHandler(conn *net.UDPConn, lossPercent int) *MessageHandler {
+	return NewMessageHandler(conn,
 		NewDefaultCmdHandlerSet(), lossPercent)
 }
 
-func NewMessageHandler(store *store.Store, conn *net.UDPConn,
+func NewMessageHandler(conn *net.UDPConn,
 	cmdHandlers map[byte]CmdHandler, lossPercent int) *MessageHandler {
 	return &MessageHandler{
-		store:             store,
 		Conn:              conn,
 		cmdHandlers:       cmdHandlers,
 		PacketLossPercent: lossPercent % 101,

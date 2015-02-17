@@ -1,16 +1,13 @@
-package api
-
-// In an attempt to avoid import cycles, all server specific UDP sending
-// functions should go here.
+package protocol
 
 import (
 	"encoding/json"
+	"errors"
 	"github.com/tsiemens/kvstore/server/node"
 	"github.com/tsiemens/kvstore/server/store"
 	"github.com/tsiemens/kvstore/shared/api"
 	"github.com/tsiemens/kvstore/shared/log"
 	"net"
-	"time"
 )
 
 type PeerList struct {
@@ -44,15 +41,8 @@ func (pl *PeerList) PointerMap() map[store.Key]*node.Peer {
 	return peers
 }
 
-type TestPeer struct {
-	Online   bool
-	LastSeen time.Time
-	Addr     net.UDPAddr
-}
-
-func SendMembershipMsg(conn *net.UDPConn, addr *net.UDPAddr, myNodeid [32]byte,
+func SendMembershipMsg(conn *net.UDPConn, addr *net.UDPAddr, myNodeId [32]byte,
 	peers map[store.Key]*node.Peer, isReply bool) error {
-	//testpeers := map[store.Key]TestPeer{}
 	peerdata, err := json.Marshal(newPeerList(peers))
 	if err != nil {
 		return err
@@ -65,6 +55,23 @@ func SendMembershipMsg(conn *net.UDPConn, addr *net.UDPAddr, myNodeid [32]byte,
 			code = api.CmdMembershipResponse
 		}
 		return api.NewKeyValueDgram(api.NewMessageUID(addr),
-			code, node.GetProcessNode().ID, peerdata)
+			code, myNodeId, peerdata)
 	})
+}
+
+func SendMembershipQuery(url string) (map[store.Key]*node.Peer, error) {
+	msg, err := api.SendRecv(url, func(addr *net.UDPAddr) api.Message {
+		return api.NewBaseDgram(api.NewMessageUID(addr), api.CmdMembershipQuery)
+	})
+	if err != nil {
+		return nil, err
+	} else if cmdErr := api.ResponseError(msg); cmdErr != nil {
+		return nil, cmdErr
+	} else if vmsg, ok := msg.(*api.ValueDgram); ok {
+		peers := &PeerList{}
+		err := json.Unmarshal(vmsg.Value, peers)
+		return peers.PointerMap(), err
+	} else {
+		return nil, errors.New("Received invalid membership qeury datagram")
+	}
 }

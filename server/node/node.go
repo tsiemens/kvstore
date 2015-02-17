@@ -23,6 +23,7 @@ type Node struct {
 	KnownPeers map[store.Key]*Peer
 	Lock       util.Semaphore
 	Conn       *net.UDPConn
+	Store      *store.Store
 }
 
 type Peer struct {
@@ -33,12 +34,13 @@ type Peer struct {
 
 var node *Node
 
-func Init(localAddr *net.UDPAddr, conn *net.UDPConn) {
+func Init(localAddr *net.UDPAddr, conn *net.UDPConn, procStore *store.Store) {
 	node = &Node{
 		ID:         createNodeID(localAddr),
 		KnownPeers: map[store.Key]*Peer{},
 		Lock:       util.NewSemaphore(),
 		Conn:       conn,
+		Store:      procStore,
 	}
 
 	log.I.Println("Node initialized with ID: " + node.ID.String())

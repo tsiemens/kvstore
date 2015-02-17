@@ -19,6 +19,7 @@ const CmdStatusUpdate = 0x21
 const CmdAdhocUpdate = 0x22
 const CmdMembership = 0x23
 const CmdMembershipResponse = 0x24
+const CmdMembershipQuery = 0x25
 
 // Response codes that can be sent back to the client
 const RespOk = 0x00
@@ -163,12 +164,7 @@ func ParseMessage(dgram []byte,
 	}
 
 	uid := dgram[:16]
-	buf := bytes.NewBuffer(dgram[16:])
-
-	command, err := buf.ReadByte()
-	if err != nil {
-		return nil, err
-	}
+	command := dgram[16]
 
 	if parser, ok := parserMap[command]; ok {
 		return parser(byteArray16(uid), command, dgram[17:])

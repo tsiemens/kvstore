@@ -4,7 +4,6 @@ import (
 	"net"
 
 	"encoding/json"
-	serverapi "github.com/tsiemens/kvstore/server/api"
 	"github.com/tsiemens/kvstore/server/config"
 	"github.com/tsiemens/kvstore/server/node"
 	"github.com/tsiemens/kvstore/server/protocol"
@@ -17,7 +16,7 @@ import (
 
 func HandleGet(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
 	keyMsg := msg.(*api.KeyDgram)
-	val, err := handler.store.Get(store.Key(keyMsg.Key))
+	val, err := node.GetProcessNode().Store.Get(store.Key(keyMsg.Key))
 	if err != nil {
 		log.E.Println(err)
 	}
@@ -26,7 +25,9 @@ func HandleGet(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) 
 
 func HandlePut(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
 	keyValMsg := msg.(*api.KeyValueDgram)
-	err := handler.store.Put(store.Key(keyValMsg.Key), keyValMsg.Value)
+	err := node.GetProcessNode().Store.Put(
+		store.Key(keyValMsg.Key),
+		keyValMsg.Value)
 	success := true
 	if err != nil {
 		success = false
@@ -37,7 +38,7 @@ func HandlePut(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) 
 
 func HandleRemove(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
 	keyMsg := msg.(*api.KeyDgram)
-	err := handler.store.Remove(store.Key(keyMsg.Key))
+	err := node.GetProcessNode().Store.Remove(store.Key(keyMsg.Key))
 	success := true
 	if err != nil {
 		success = false
@@ -117,7 +118,7 @@ func handleMembership(handler *MessageHandler, msg api.Message,
 	recvAddr *net.UDPAddr, reply bool) {
 	if keyValMsg, ok := msg.(*api.KeyValueDgram); ok {
 		nodeId := keyValMsg.Key
-		peers := &serverapi.PeerList{}
+		peers := &protocol.PeerList{}
 		err := json.Unmarshal(keyValMsg.Value, peers)
 		if err != nil {
 			log.E.Println(err)
@@ -125,7 +126,7 @@ func handleMembership(handler *MessageHandler, msg api.Message,
 			thisNode := node.GetProcessNode()
 			thisNode.UpdatePeers(peers.PointerMap(), nodeId, recvAddr)
 			if reply {
-				err = serverapi.SendMembershipMsg(handler.Conn, recvAddr,
+				err = protocol.SendMembershipMsg(handler.Conn, recvAddr,
 					thisNode.ID, thisNode.KnownPeers, true)
 				if err != nil {
 					thisNode.SetPeerOffline(nodeId)
@@ -136,5 +137,13 @@ func handleMembership(handler *MessageHandler, msg api.Message,
 		}
 	} else {
 		log.E.Println("Received invalid membership datagram")
+	}
+}
+
+func HandleMembershipQuery(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
+	err := protocol.ReplyToMembershipQuery(handler.Conn, recvAddr, msg,
+		node.GetProcessNode().ID, node.GetProcessNode().KnownPeers)
+	if err != nil {
+		log.E.Println(err)
 	}
 }

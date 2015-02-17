@@ -41,7 +41,12 @@ func main() {
 
 	if cl.StatusServer {
 		log.Out.Printf("Starting http server")
-		log.E.Panic("Status server temporarily disabled!")
+		peers, err := protocol.SendMembershipQuery("localhost:5555")
+		if err != nil {
+			log.E.Println(err)
+		} else {
+			log.Out.Println(node.PeerListString(peers))
+		}
 		//	statusHandler := handler.NewStatusHandler()
 		//	go httpServer.CreateHttpServer(strconv.Itoa(config.GetConfig().StatusServerHttpPort), statusHandler)
 		log.Out.Printf("Starting status receiver")
@@ -49,9 +54,9 @@ func main() {
 
 	} else {
 		store := store.New()
-		node.Init(localAddr, conn)
+		node.Init(localAddr, conn, store)
 		loop.GoAll()
-		msgHandler := handler.NewDefaultMessageHandler(store, conn, cl.PacketLossPct)
+		msgHandler := handler.NewDefaultMessageHandler(conn, cl.PacketLossPct)
 		err = protocol.LoopReceiver(conn, msgHandler)
 	}
 	log.E.Fatal(err)

@@ -35,7 +35,7 @@ func recvFrom(conn *net.UDPConn) (api.Message, *net.UDPAddr, net.Error) {
 			log.E.Println(err)
 		} else {
 			//log.D.Printf("Received [% x]\n", buff[0:60])
-			requestMsg, err := api.ParseMessage(buff[0:n], MessageParsers)
+			requestMsg, err := api.ParseMessage(buff[0:n], api.CmdMessageParsers)
 			if err != nil {
 				log.E.Println(err)
 			} else {
