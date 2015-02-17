@@ -34,7 +34,7 @@
     </tr>
     {{ range $index, $value := $ }}
     <tr>
-      <td>{{ $index }}</th>
+      <td>{{ $value.Hostname }}</th>
       <td>{{ $value.Status }}</th>
       <td>{{ $value.LastSeen }}</th>
       <td class='inner-table'>

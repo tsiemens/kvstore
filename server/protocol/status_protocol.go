@@ -3,18 +3,32 @@ package protocol
 import (
 	"github.com/tsiemens/kvstore/server/config"
 	"github.com/tsiemens/kvstore/server/node"
+	"github.com/tsiemens/kvstore/server/store"
 	"github.com/tsiemens/kvstore/shared/api"
 	"github.com/tsiemens/kvstore/shared/log"
 	"net"
 	"time"
 )
 
+var StatusMessageParsers = map[byte]api.MessagePayloadParser{
+	api.CmdStatusUpdate: api.ParseKeyValueDgram,
+	api.CmdAdhocUpdate:  api.ParseKeyValueDgram,
+
+	api.RespOk:             api.ParseValueDgram,
+	api.RespSysOverload:    api.ParseBaseDgram,
+	api.RespInternalError:  api.ParseBaseDgram,
+	api.RespUnknownCommand: api.ParseBaseDgram,
+	api.RespStatusUpdateOK: api.ParseValueDgram,
+	api.RespAdhocUpdateOK:  api.ParseValueDgram,
+}
+
 type StatusMessageHandler interface {
 	HandleStatusMessage(msg api.Message, recvAddr *net.UDPAddr)
+	HandlePeerListUpdate(peers map[store.Key]*node.Peer)
 }
 
 func StatusReceiver(conn *net.UDPConn, handler StatusMessageHandler) error {
-	go periodicStatusUpdate(conn)
+	go periodicStatusUpdate(conn, handler)
 	for {
 		msg, recvAddr, err := recvFromStatus(conn)
 		if err != nil {
@@ -29,15 +43,25 @@ func StatusReceiver(conn *net.UDPConn, handler StatusMessageHandler) error {
 	}
 }
 
-func periodicStatusUpdate(conn *net.UDPConn) {
+func periodicStatusUpdate(conn *net.UDPConn, handler StatusMessageHandler) {
 	conf := config.GetConfig()
-	node := node.GetProcessNode()
 	for {
-		peer, key := node.RandomPeer()
-		if peer != nil {
-			err := api.StatusUpdate(conn, peer.Addr.String(), *key)
+		randomPeer := node.RandomWellKnownPeer()
+		if randomPeer != nil {
+			peers, err := SendMembershipQuery(randomPeer.Addr.String())
 			if err != nil {
 				log.E.Println(err)
+			} else {
+				handler.HandlePeerListUpdate(peers)
+				randKey, err := api.NewRandKey()
+				if err != nil {
+					log.E.Println(err)
+				} else {
+					err := api.StatusUpdate(conn, randomPeer.Addr.String(), randKey)
+					if err != nil {
+						log.E.Println(err)
+					}
+				}
 			}
 		}
 		time.Sleep(conf.UpdateFrequency)
@@ -57,7 +81,7 @@ func recvFromStatus(conn *net.UDPConn) (api.Message, *net.UDPAddr, net.Error) {
 		} else {
 			//log.D.Printf("Received [% x]\n", buff[0:60])
 			responseMsg, err := api.ParseMessage(buff[0:n],
-				api.CmdMessageParsers)
+				StatusMessageParsers)
 			if err != nil {
 				log.E.Println(err)
 			} else {

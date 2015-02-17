@@ -4,9 +4,11 @@ import (
 	"flag"
 	"io/ioutil"
 	"os"
+	"strconv"
 
 	"github.com/tsiemens/kvstore/server/config"
 	"github.com/tsiemens/kvstore/server/handler"
+	"github.com/tsiemens/kvstore/server/httpServer"
 	"github.com/tsiemens/kvstore/server/loop"
 	"github.com/tsiemens/kvstore/server/node"
 	"github.com/tsiemens/kvstore/server/protocol"
@@ -41,16 +43,10 @@ func main() {
 
 	if cl.StatusServer {
 		log.Out.Printf("Starting http server")
-		peers, err := protocol.SendMembershipQuery("localhost:5555")
-		if err != nil {
-			log.E.Println(err)
-		} else {
-			log.Out.Println(node.PeerListString(peers))
-		}
-		//	statusHandler := handler.NewStatusHandler()
-		//	go httpServer.CreateHttpServer(strconv.Itoa(config.GetConfig().StatusServerHttpPort), statusHandler)
+		statusHandler := handler.NewStatusHandler()
+		go httpServer.CreateHttpServer(strconv.Itoa(config.GetConfig().StatusServerHttpPort), statusHandler)
 		log.Out.Printf("Starting status receiver")
-		//	err = api.StatusReceiver(conn, statusHandler)
+		err = protocol.StatusReceiver(conn, statusHandler)
 
 	} else {
 		store := store.New()

@@ -59,10 +59,13 @@ func createNodeID(localAddr *net.UDPAddr) store.Key {
 
 func wellKnownPeers() []*net.UDPAddr {
 	conf := config.GetConfig()
-	myAddr := GetProcessNode().Conn.LocalAddr().(*net.UDPAddr)
+	var myAddr *net.UDPAddr
+	if GetProcessNode() != nil {
+		myAddr = GetProcessNode().Conn.LocalAddr().(*net.UDPAddr)
+	}
 	if conf.UseLoopback {
 		p, _ := net.ResolveUDPAddr("udp", "localhost:"+strconv.Itoa(conf.DefaultLocalhostPort))
-		if util.AddrsEqual(myAddr, p) {
+		if myAddr != nil && util.AddrsEqual(myAddr, p) {
 			return []*net.UDPAddr{}
 		} else {
 			return []*net.UDPAddr{p}
@@ -71,12 +74,20 @@ func wellKnownPeers() []*net.UDPAddr {
 		knownPeers := make([]*net.UDPAddr, 0, len(conf.PeerList))
 		for _, peer := range conf.PeerList {
 			peerAddr, _ := net.ResolveUDPAddr("udp", peer)
-			if !util.AddrsEqual(myAddr, peerAddr) {
+			if myAddr == nil || !util.AddrsEqual(myAddr, peerAddr) {
 				knownPeers = append(knownPeers, peerAddr)
 			}
 		}
 		return knownPeers
 	}
+}
+
+func RandomWellKnownPeer() *Peer {
+	wellKnown := wellKnownPeers()
+	if len(wellKnown) == 0 { // May happen when this node is the only well known one
+		return nil
+	}
+	return &Peer{Addr: wellKnown[util.Rand.Intn(len(wellKnown))]}
 }
 
 func (node *Node) CountOnlinePeers() int {
@@ -95,11 +106,7 @@ func (node *Node) RandomPeer() (*Peer, *store.Key) {
 	size := node.CountOnlinePeers()
 	if size == 0 {
 		log.D.Println("No peers online. Looking for well known peers...")
-		wellKnown := wellKnownPeers()
-		if len(wellKnown) == 0 { // May happen when this node is the only well known one
-			return nil, nil
-		}
-		return &Peer{Addr: wellKnown[util.Rand.Intn(len(wellKnown))]}, nil
+		return RandomWellKnownPeer(), nil
 	}
 	rand := util.Rand.Intn(size)
 	i := 0

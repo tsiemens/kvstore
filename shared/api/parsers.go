@@ -19,6 +19,6 @@ var RespMessageParsers = map[byte]MessagePayloadParser{
 	RespInternalError:    ParseBaseDgram,
 	RespUnknownCommand:   ParseBaseDgram,
 	RespStatusUpdateFail: ParseBaseDgram,
-	RespStatusUpdateOK:   ParseBaseDgram,
-	RespAdhocUpdateOK:    ParseBaseDgram,
+	RespStatusUpdateOK:   ParseKeyValueDgram,
+	RespAdhocUpdateOK:    ParseKeyValueDgram,
 }
