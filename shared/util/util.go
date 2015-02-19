@@ -1,8 +1,14 @@
 package util
 
-import "errors"
-import "net"
-import "time"
+import (
+	"errors"
+	"math/rand"
+	"net"
+	"time"
+)
+
+// To be used for convenience as the random source throughout the app
+var Rand = rand.New(rand.NewSource(UnixMilliTimestamp()))
 
 // Makes a new UDP socket on the primary network connection
 // If port is 0, it will select one automatically
@@ -51,4 +57,8 @@ func IsHostReachable(host string, timeout time.Duration, portRange []string) boo
 	}
 
 	return false
+}
+
+func AddrsEqual(a1 *net.UDPAddr, a2 *net.UDPAddr) bool {
+	return a1.IP.Equal(a2.IP) && a1.Port == a2.Port
 }

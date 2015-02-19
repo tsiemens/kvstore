@@ -1,10 +1,11 @@
 package handler
 
 import (
-	"github.com/tsiemens/kvstore/server/config"
+	"fmt"
+	"github.com/tsiemens/kvstore/server/node"
+	"github.com/tsiemens/kvstore/server/store"
 	"github.com/tsiemens/kvstore/shared/api"
 	"github.com/tsiemens/kvstore/shared/log"
-	"github.com/tsiemens/kvstore/shared/util"
 	"html/template"
 	"net"
 	"net/http"
@@ -20,6 +21,8 @@ const (
 )
 
 type Status struct {
+	NodeId           store.Key
+	Hostname         string
 	Status           string
 	LastSeen         *time.Time
 	ApplicationSpace string
@@ -39,94 +42,71 @@ type DiskSpaceEntry struct {
 
 type StatusHandler struct {
 	StatusList map[string]*Status
-	HostIPMap  map[string]string
 }
 
 func NewStatusHandler() *StatusHandler {
-
 	statusList := make(map[string]*Status, 0)
-	hostIPMap := make(map[string]string, 0)
-	c := config.GetConfig()
-
-	for _, node := range c.PeerList {
-		/*
-			var nodeStatus string
-			if util.IsHostReachable(node, c.DialTimeout, c.DefaultPortList) {
-				nodeStatus = UP
-			} else {
-				nodeStatus = OFFLINE
-			}
-		*/
-		newStatus := &Status{
-			UNKNOWN,
-			nil,
-			"", /*space used by the application*/
-			[]*DiskSpaceEntry{},
-			"", /*uptime*/
-			"", /*current load*/
-		}
-		ip, err := net.LookupIP(node)
-		if err != nil {
-			log.E.Println(err)
-		}
-		if len(ip) > 0 {
-			hostIPMap[ip[0].String()] = node
-		}
-		statusList[node] = newStatus
-
-	}
-
-	go func(c *config.Config, statusList map[string]*Status) {
-		for hostname, node := range statusList {
-			if util.IsHostReachable(hostname, c.DialTimeout, c.DefaultPortList) {
-				node.Status = UNKNOWN
-			} else {
-				node.Status = OFFLINE
-			}
-		}
-	}(c, statusList)
-
 	return &StatusHandler{
 		StatusList: statusList,
-		HostIPMap:  hostIPMap,
 	}
 }
 
-func (handler *StatusHandler) HandleStatusMessage(msg *api.ResponseMessage, recvAddr *net.UDPAddr) {
-	data := strings.Split(string(msg.Value), "\t\n\t\n")
-	//TODO - update old status instead of creating new status
-	t := time.Now()
-	newStatus := &Status{
-		UP,
-		&t,
-		strings.TrimSpace(data[0]),
-		parseDiskSpace(strings.TrimSpace(data[1])),
-		strings.TrimSpace(data[2]),
-		strings.TrimSpace(data[3]),
+func (handler *StatusHandler) PruneStatusMap(peers map[store.Key]*node.Peer) {
+	for host, status := range handler.StatusList {
+		if _, ok := peers[status.NodeId]; !ok {
+			delete(handler.StatusList, host)
+		}
 	}
-
-	handler.StatusList[handler.HostIPMap[recvAddr.IP.String()]] = newStatus
-	go handler.CheckNodeReach()
 }
 
-func (handler *StatusHandler) CheckNodeReach() {
-	for {
-		now := time.Now()
-		for node, status := range handler.StatusList {
-			if status.LastSeen == nil {
-				continue
+func (handler *StatusHandler) UpdateStatusMap(peers map[store.Key]*node.Peer) {
+	handler.PruneStatusMap(peers)
+	for key, peer := range peers {
+		if _, ok := handler.StatusList[peer.Addr.String()]; !ok {
+			var st string
+			if peer.Online {
+				st = UP
+			} else {
+				st = OFFLINE
 			}
-			if time.Now().Sub(*status.LastSeen) > config.GetConfig().NodeTimeout {
-				if status.Status == UP || status.Status == NOT_RESPONDING {
-					if util.IsHostReachable(node, config.GetConfig().DialTimeout, config.GetConfig().DefaultPortList) {
-						status.Status = NOT_RESPONDING
-					} else {
-						status.Status = OFFLINE
-					}
-				}
+			var hostname string
+			hosts, err := net.LookupAddr(peer.Addr.IP.String())
+			if err != nil {
+				log.E.Println(err)
+				hostname = peer.Addr.String()
+			} else {
+				hostname = fmt.Sprintf("%s:%d", hosts[0], peer.Addr.Port)
+			}
+			handler.StatusList[peer.Addr.String()] = &Status{
+				key,
+				hostname,
+				st,
+				&peer.LastSeen,
+				"", /*space used by the application*/
+				[]*DiskSpaceEntry{},
+				"", /*uptime*/
+				"", /*current load*/
 			}
 		}
+	}
+}
 
+func (handler *StatusHandler) HandlePeerListUpdate(peers map[store.Key]*node.Peer) {
+	handler.UpdateStatusMap(peers)
+}
+
+func (handler *StatusHandler) HandleStatusMessage(msg api.Message, recvAddr *net.UDPAddr) {
+	status, ok := handler.StatusList[recvAddr.String()]
+	if msg.Command() == api.RespStatusUpdateOK && ok {
+		vMsg := msg.(*api.ValueDgram)
+		data := strings.Split(string(vMsg.Value), "\t\n\t\n")
+		t := time.Now()
+		status.Status = UP
+		status.LastSeen = &t
+		status.ApplicationSpace = strings.TrimSpace(data[0])
+		status.DiskSpace = parseDiskSpace(strings.TrimSpace(data[1]))
+		status.Uptime = strings.TrimSpace(data[2])
+		status.CurrentLoad = strings.TrimSpace(data[3])
 	}
 }
 
@@ -143,12 +123,6 @@ func (handler *StatusHandler) ServeHttp(writer http.ResponseWriter, req *http.Re
 	}
 
 }
-
-/*
-func GetStatusList() map[string]Status {
-	return statusList
-}
-*/
 
 func parseDiskSpace(input string) []*DiskSpaceEntry {
 	diskSpaceEntries := make([]*DiskSpaceEntry, 0)

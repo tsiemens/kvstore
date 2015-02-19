@@ -1,8 +1,8 @@
 package commands
 
 import "errors"
-import "encoding/hex"
 import "github.com/tsiemens/kvstore/shared/api"
+import clientapi "github.com/tsiemens/kvstore/client/api"
 import "github.com/tsiemens/kvstore/shared/log"
 import "crypto/rand"
 
@@ -66,12 +66,12 @@ func (c *GetCommand) Run(url string, args []string) error {
 		return errors.New("get requires KEY argument")
 	}
 
-	key, err := keyFromHex(args[0])
+	key, err := api.KeyFromHex(args[0])
 	if err != nil {
 		return err
 	}
 
-	val, err := api.Get(url, key)
+	val, err := clientapi.Get(url, key)
 	if err != nil {
 		return err
 	}
@@ -79,16 +79,6 @@ func (c *GetCommand) Run(url string, args []string) error {
 	log.Out.Println("Retreived:")
 	log.Out.Println(string(val))
 	return nil
-}
-
-func keyFromHex(keystring string) (key [32]byte, err error) {
-	keyslice, err := hex.DecodeString(keystring)
-	if err != nil {
-		return
-	}
-
-	key, err = api.NewKey(keyslice)
-	return
 }
 
 type PutCommand struct {
@@ -109,13 +99,13 @@ func (c *PutCommand) Run(url string, args []string) error {
 		return errors.New("put requires KEY and VALUE arguments")
 	}
 
-	key, err := keyFromHex(args[0])
+	key, err := api.KeyFromHex(args[0])
 	if err != nil {
 		return err
 	}
 
 	value := args[1]
-	err = api.Put(url, key, []byte(value))
+	err = clientapi.Put(url, key, []byte(value))
 	if err != nil {
 		return err
 	}
@@ -141,12 +131,12 @@ func (c *RemoveCommand) Run(url string, args []string) error {
 		return errors.New("remove requires KEY argument")
 	}
 
-	key, err := keyFromHex(args[0])
+	key, err := api.KeyFromHex(args[0])
 	if err != nil {
 		return err
 	}
 
-	err = api.Remove(url, key)
+	err = clientapi.Remove(url, key)
 	if err != nil {
 		return err
 	}
@@ -158,6 +148,7 @@ func (c *RemoveCommand) Run(url string, args []string) error {
 func PrintCommands() {
 	printCommandHelp(newGetCommand())
 	printCommandHelp(newPutCommand())
+	printCommandHelp(newRemoveCommand())
 }
 
 func printCommandHelp(cmd Command) {
@@ -192,7 +183,7 @@ func (c *StatusUpdateCommand) Run(url string, args []string) error {
 		return err
 	}
 
-	err = api.StatusUpdate(url, key)
+	err = api.StatusUpdate(nil, url, key)
 	if err != nil {
 		return err
 	}
@@ -228,7 +219,7 @@ func (c *AdhocUpdateCommand) Run(url string, args []string) error {
 	}
 
 	value := args[0]
-	err = api.AdhocUpdate(url, key, []byte(value))
+	err = api.AdhocUpdate(nil, url, key, []byte(value))
 	if err != nil {
 		return err
 	}
