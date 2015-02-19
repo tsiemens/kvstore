@@ -20,3 +20,38 @@ This system would arguably be less scalable in circumstances where many many nod
 
 #### Additional features
 In addition to the standard monitor data message accepted by each node, arbitrary bash scripts can also be executed. For scalability, these are also propogated epidemically. This is useful, for example, if a new node was added, the process could use sed to modify the config file, then fork a process to restart the node. Unfortunately this does not yet support uploading binary files.
+
+#### Test Cases
+The following test cases were performed in this order:
+* GET a value with a key that doesn't exist in the store (Result: ERROR)
+* PUT a new value 'hello' with key X (Result: Success)
+* GET a value with key X (Result: 'hello', Success)
+* GET a value with a key that doesn't exist in the store (Result: ERROR)
+* PUT a new value 'world' with key X (Result: Success)
+* GET a value with key X (Result: 'world', Success)
+* REMOVE a value with a key that doesn't exist in the store (Result: ERROR)
+* REMOVE a value with key X (Result: Success)
+* REMOVE a value with key X (Result: ERROR)
+
+#### Performance
+We ran the following performance metrics:
+
+Testing performance of 100 asynchronous puts...
+real	0m1.480s
+user	0m0.287s
+sys	0m0.349s
+
+Testing performance of 100 synchronous puts...
+real	0m1.708s
+user	0m0.279s
+sys	0m0.326s
+
+Testing performance of 100 synchronous gets...
+real	0m1.619s
+user	0m0.262s
+sys	0m0.366s
+
+Testing performance of 100 synchronous deletes...
+real	0m1.874s
+user	0m0.272s
+sys	0m0.430s
