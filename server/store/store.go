@@ -44,7 +44,11 @@ func (s *Store) Put(key Key, value []byte) error {
 
 func (s *Store) Remove(key Key) error {
 	if s.IsMyKey(key) {
-		delete(s.m, key)
+		if _, ok := s.m[key]; ok {
+			delete(s.m, key)
+		} else {
+			return errors.New("No value for " + key.String())
+		}
 	} else {
 		log.D.Println("TODO Was told to remove not my key")
 	}
