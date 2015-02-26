@@ -66,7 +66,7 @@ func getCommandLine() *KVStoreCommandLine {
 func printHelp() {
 	log.Out.Println("Client for the KVStore Key Value Store.\n\n" +
 		"Usage:\n    client [OPTIONS] COMMAND HOST:PORT [ARGS...]\n" +
-		"    eg. $ client get 168.235.153.23:5627 909090\n\n" +
+		"    eg. $ client get 168.235.153.23:5627 foo\n\n" +
 		"Commands:")
 	commands.PrintCommands()
 	//"get	Gets the value for a key.\n" +
