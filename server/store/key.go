@@ -54,3 +54,18 @@ func (k *Key) LessEquals(other Key) bool {
 func (k *Key) String() string {
 	return fmt.Sprintf("%x", k[:])
 }
+
+// Needed to implement sort.Interface
+type Keys []Key
+
+func (slice Keys) Len() int {
+	return len(slice)
+}
+
+func (slice Keys) Less(i, j int) bool {
+	return slice[i].LessThan(slice[j])
+}
+
+func (slice Keys) Swap(i, j int) {
+	slice[i], slice[j] = slice[j], slice[i]
+}
