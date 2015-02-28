@@ -15,6 +15,7 @@ import "github.com/tsiemens/kvstore/shared/util"
 const CmdPut = 0x01
 const CmdGet = 0x02
 const CmdRemove = 0x03
+const CmdShutdown = 0x04
 const CmdStatusUpdate = 0x21
 const CmdAdhocUpdate = 0x22
 const CmdMembership = 0x23
