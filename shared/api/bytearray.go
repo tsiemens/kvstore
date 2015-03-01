@@ -12,7 +12,7 @@ func NewKey(slice []byte) ([32]byte, error) {
 	if len(slice) > 32 {
 		return [32]byte{}, errors.New("Key too large: must be 32 bytes max")
 	} else {
-		return byteArray32(slice), nil
+		return ByteArray32(slice), nil
 	}
 }
 
@@ -45,7 +45,7 @@ func KeyFromHex(keystring string) (key [32]byte, err error) {
 
 // slice must be at most 32 bytes.
 // If slice is less than 32 bytes, it will be right-packed
-func byteArray32(slice []byte) [32]byte {
+func ByteArray32(slice []byte) [32]byte {
 	var arr [32]byte
 	offset := 32 - len(slice)
 	for i := 0; i < len(slice); i++ {
@@ -56,7 +56,7 @@ func byteArray32(slice []byte) [32]byte {
 
 // slice must be at most 16 bytes.
 // If slice is less than 16 bytes, it will be right-packed
-func byteArray16(slice []byte) [16]byte {
+func ByteArray16(slice []byte) [16]byte {
 	var arr [16]byte
 	offset := 16 - len(slice)
 	for i := 0; i < len(slice); i++ {

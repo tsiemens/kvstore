@@ -118,7 +118,7 @@ func NewMessageUID(addr *net.UDPAddr) [16]byte {
 		binary.Write(buf, binary.LittleEndian, util.UnixMilliTimestamp()) != nil {
 		log.E.Panic("binary.Write failed!")
 	}
-	return byteArray16(buf.Bytes())
+	return ByteArray16(buf.Bytes())
 }
 
 // Returns byte datagram representation of message
@@ -168,7 +168,7 @@ func ParseMessage(dgram []byte,
 	command := dgram[16]
 
 	if parser, ok := parserMap[command]; ok {
-		return parser(byteArray16(uid), command, dgram[17:])
+		return parser(ByteArray16(uid), command, dgram[17:])
 	} else {
 		return nil, errors.New(fmt.Sprintf("Could not parse unrecognized command 0x%x", command))
 	}
@@ -188,7 +188,7 @@ func parseKey(b []byte) ([32]byte, error) {
 		return [32]byte{}, errors.New("Too few bytes to parse key")
 	}
 
-	return byteArray32(key), nil
+	return ByteArray32(key), nil
 }
 
 func ParseKeyDgram(uid [16]byte, cmd byte, payload []byte) (Message, error) {
