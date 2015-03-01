@@ -80,7 +80,7 @@ func recvFromStatus(conn *net.UDPConn) (api.Message, *net.UDPAddr, net.Error) {
 			log.E.Println(err)
 		} else {
 			//log.D.Printf("Received [% x]\n", buff[0:60])
-			responseMsg, err := api.ParseMessage(buff[0:n],
+			responseMsg, err, _ := api.ParseMessage(buff[0:n],
 				StatusMessageParsers)
 			if err != nil {
 				log.E.Println(err)

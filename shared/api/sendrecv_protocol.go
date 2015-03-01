@@ -104,7 +104,7 @@ func (self *protocolReceiver) recvMsg(timeoutms int) (Message, net.Error) {
 			recvAddr.Port == self.RemoteAddr.Port {
 
 			log.D.Printf("Received [% x]\n", buff[0:60])
-			serverMsg, err := ParseMessage(buff[0:n], RespMessageParsers)
+			serverMsg, err, _ := ParseMessage(buff[0:n], RespMessageParsers)
 			if err == nil && serverMsg.UID() == self.MsgUID {
 				return serverMsg, nil
 			}

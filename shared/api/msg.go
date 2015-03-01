@@ -32,6 +32,7 @@ const RespUnknownCommand = 0x05
 const RespStatusUpdateFail = 0x06
 const RespStatusUpdateOK = 0x07
 const RespAdhocUpdateOK = 0x08
+const RespMalformedDatagram = 0x09
 
 type BaseDgram struct {
 	uid     [16]byte
@@ -157,20 +158,30 @@ func (msg *ValueDgram) Bytes() []byte {
 type MessagePayloadParser func(uid [16]byte, cmd byte,
 	payload []byte) (Message, error)
 
+/* Parses message.
+ * Returns the message, or an error, plus a response message for the error */
 func ParseMessage(dgram []byte,
-	parserMap map[byte]MessagePayloadParser) (Message, error) {
+	parserMap map[byte]MessagePayloadParser) (Message, error, Message) {
 
 	if len(dgram) < 17 {
-		return nil, errors.New("Datagram header improperly formatted")
+		return nil, errors.New("Datagram header improperly formatted"), nil
 	}
 
 	uid := dgram[:16]
 	command := dgram[16]
 
 	if parser, ok := parserMap[command]; ok {
-		return parser(ByteArray16(uid), command, dgram[17:])
+		msg, err := parser(ByteArray16(uid), command, dgram[17:])
+		if err != nil {
+			return nil, err,
+				NewBaseDgram(ByteArray16(uid), RespMalformedDatagram)
+		} else {
+			return msg, nil, nil
+		}
 	} else {
-		return nil, errors.New(fmt.Sprintf("Could not parse unrecognized command 0x%x", command))
+		return nil,
+			errors.New(fmt.Sprintf("Could not parse unrecognized command 0x%x", command)),
+			NewBaseDgram(ByteArray16(uid), RespUnknownCommand)
 	}
 }
 
