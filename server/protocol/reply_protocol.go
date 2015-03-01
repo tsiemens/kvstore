@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"encoding/json"
+	"github.com/tsiemens/kvstore/server/cache"
 	"github.com/tsiemens/kvstore/server/node"
 	"github.com/tsiemens/kvstore/server/store"
 	"github.com/tsiemens/kvstore/shared/api"
@@ -9,7 +10,7 @@ import (
 	"time"
 )
 
-func ReplyToGet(conn *net.UDPConn, recvAddr *net.UDPAddr,
+func ReplyToGet(conn *net.UDPConn, recvAddr *net.UDPAddr, cache *cache.Cache,
 	requestMsg api.Message, value []byte) {
 	var reply api.Message
 	if value != nil {
@@ -17,10 +18,10 @@ func ReplyToGet(conn *net.UDPConn, recvAddr *net.UDPAddr,
 	} else {
 		reply = api.NewBaseDgram(requestMsg.UID(), api.RespInvalidKey)
 	}
-	conn.WriteTo(reply.Bytes(), recvAddr)
+	cache.SendReply(conn, reply, recvAddr)
 }
 
-func ReplyToPut(conn *net.UDPConn, recvAddr *net.UDPAddr,
+func ReplyToPut(conn *net.UDPConn, recvAddr *net.UDPAddr, cache *cache.Cache,
 	requestMsg api.Message, success bool) {
 	var reply api.Message
 	if success {
@@ -28,10 +29,10 @@ func ReplyToPut(conn *net.UDPConn, recvAddr *net.UDPAddr,
 	} else {
 		reply = api.NewBaseDgram(requestMsg.UID(), api.RespInvalidKey)
 	}
-	conn.WriteTo(reply.Bytes(), recvAddr)
+	cache.SendReply(conn, reply, recvAddr)
 }
 
-func ReplyToRemove(conn *net.UDPConn, recvAddr *net.UDPAddr,
+func ReplyToRemove(conn *net.UDPConn, recvAddr *net.UDPAddr, cache *cache.Cache,
 	requestMsg api.Message, success bool) {
 	var reply api.Message
 	if success {
@@ -39,17 +40,17 @@ func ReplyToRemove(conn *net.UDPConn, recvAddr *net.UDPAddr,
 	} else {
 		reply = api.NewBaseDgram(requestMsg.UID(), api.RespInvalidKey)
 	}
-	conn.WriteTo(reply.Bytes(), recvAddr)
+	cache.SendReply(conn, reply, recvAddr)
 }
 
-func ReplyToStatusUpdateServer(conn *net.UDPConn, recvAddr *net.UDPAddr,
+func ReplyToStatusUpdateServer(conn *net.UDPConn, recvAddr *net.UDPAddr, cache *cache.Cache,
 	requestMsg api.Message, statusResult []byte, success bool) {
 	var respCode byte
 
 	if !success {
 		respCode = api.RespStatusUpdateFail
-		conn.WriteTo(api.NewValueDgram(requestMsg.UID(), respCode,
-			statusResult).Bytes(),
+		cache.SendReply(conn, api.NewValueDgram(requestMsg.UID(), respCode,
+			statusResult),
 			recvAddr)
 		return
 	}
@@ -63,13 +64,12 @@ func ReplyToStatusUpdateServer(conn *net.UDPConn, recvAddr *net.UDPAddr,
 		respCode = api.RespOk
 	}
 
-	//TODO - figure out what to do with UID
-	conn.WriteTo(api.NewValueDgram(requestMsg.UID(), respCode,
-		statusResult).Bytes(),
+	cache.SendReply(conn, api.NewValueDgram(requestMsg.UID(), respCode,
+		statusResult),
 		recvAddr)
 }
 
-func ReplyToMembershipQuery(conn *net.UDPConn, recvAddr *net.UDPAddr,
+func ReplyToMembershipQuery(conn *net.UDPConn, recvAddr *net.UDPAddr, cache *cache.Cache,
 	requestMsg api.Message, myNodeId [32]byte,
 	peers map[store.Key]*node.Peer) error {
 
@@ -85,24 +85,25 @@ func ReplyToMembershipQuery(conn *net.UDPConn, recvAddr *net.UDPAddr,
 	if err != nil {
 		return err
 	}
-	conn.WriteTo(
-		api.NewValueDgram(requestMsg.UID(), api.RespOk, peerdata).Bytes(),
+	cache.SendReply(
+		conn,
+		api.NewValueDgram(requestMsg.UID(), api.RespOk, peerdata),
 		recvAddr)
 	return nil
 }
 
-func NotifyStatusUpdate(conn *net.UDPConn, recvAddr *net.UDPAddr,
+func NotifyStatusUpdate(conn *net.UDPConn, recvAddr *net.UDPAddr, cache *cache.Cache,
 	requestMsg api.Message) {
 }
 
-func ReplyToUnknownCommand(conn *net.UDPConn, recvAddr *net.UDPAddr,
+func ReplyToUnknownCommand(conn *net.UDPConn, recvAddr *net.UDPAddr, cache *cache.Cache,
 	requestMsg api.Message) {
-	conn.WriteTo(api.NewBaseDgram(requestMsg.UID(),
-		api.RespUnknownCommand).Bytes(),
+	cache.SendReply(conn, api.NewBaseDgram(requestMsg.UID(),
+		api.RespUnknownCommand),
 		recvAddr)
 }
 
-func Debug_ReplyWithBadUID(conn *net.UDPConn, recvAddr *net.UDPAddr) {
-	conn.WriteTo(api.NewBaseDgram([16]byte{}, api.RespOk).Bytes(),
+func Debug_ReplyWithBadUID(conn *net.UDPConn, recvAddr *net.UDPAddr, cache *cache.Cache) {
+	cache.SendReply(conn, api.NewBaseDgram([16]byte{}, api.RespOk),
 		recvAddr)
 }

@@ -20,7 +20,7 @@ func HandleGet(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) 
 	if err != nil {
 		log.E.Println(err)
 	}
-	protocol.ReplyToGet(handler.Conn, recvAddr, msg, val)
+	protocol.ReplyToGet(handler.Conn, recvAddr, handler.Cache, msg, val)
 }
 
 func HandlePut(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
@@ -33,7 +33,7 @@ func HandlePut(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) 
 		success = false
 		log.E.Println(err)
 	}
-	protocol.ReplyToPut(handler.Conn, recvAddr, msg, success)
+	protocol.ReplyToPut(handler.Conn, recvAddr, handler.Cache, msg, success)
 }
 
 func HandleRemove(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
@@ -44,7 +44,7 @@ func HandleRemove(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAdd
 		success = false
 		log.E.Println(err)
 	}
-	protocol.ReplyToRemove(handler.Conn, recvAddr, msg, success)
+	protocol.ReplyToRemove(handler.Conn, recvAddr, handler.Cache, msg, success)
 }
 
 func HandleStatusUpdate(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
@@ -73,7 +73,7 @@ func HandleStatusUpdate(handler *MessageHandler, msg api.Message, recvAddr *net.
 		//uptime = "Uptime:\n" + uptime
 		success, currentload := exec.CurrentLoad()
 		//currentload = "Current load:\n" + currentload
-		protocol.ReplyToStatusUpdateServer(handler.Conn, conf.StatusServerAddr, msg, []byte(deploymentSpace+dataDelimiter+diskSpace+dataDelimiter+uptime+dataDelimiter+currentload), success)
+		protocol.ReplyToStatusUpdateServer(handler.Conn, conf.StatusServerAddr, handler.Cache, msg, []byte(deploymentSpace+dataDelimiter+diskSpace+dataDelimiter+uptime+dataDelimiter+currentload), success)
 	}
 
 	if handler.shouldGossip {
@@ -98,7 +98,7 @@ func HandleAdhocUpdate(handler *MessageHandler, msg api.Message, recvAddr *net.U
 		handler.shouldGossip = true
 		handler.statusKey = keyValMsg.Key
 		success, status := exec.RunCommand(string(keyValMsg.Value))
-		protocol.ReplyToStatusUpdateServer(handler.Conn, conf.StatusServerAddr, msg, []byte(status), success)
+		protocol.ReplyToStatusUpdateServer(handler.Conn, conf.StatusServerAddr, handler.Cache, msg, []byte(status), success)
 	}
 
 	if handler.shouldGossip {
@@ -141,7 +141,7 @@ func handleMembership(handler *MessageHandler, msg api.Message,
 }
 
 func HandleMembershipQuery(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
-	err := protocol.ReplyToMembershipQuery(handler.Conn, recvAddr, msg,
+	err := protocol.ReplyToMembershipQuery(handler.Conn, recvAddr, handler.Cache, msg,
 		node.GetProcessNode().ID, node.GetProcessNode().KnownPeers)
 	if err != nil {
 		log.E.Println(err)
