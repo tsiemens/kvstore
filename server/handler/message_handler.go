@@ -32,7 +32,7 @@ func NewDefaultCmdHandlerSet() map[byte]CmdHandler {
 		api.CmdMembership:         HandleMembershipMsg,
 		api.CmdMembershipResponse: HandleMembershipResponse,
 		api.CmdMembershipQuery:    HandleMembershipQuery,
-		//		api.CmdShutdown:           HandleShutdown,
+		api.CmdShutdown:           HandleShutdown,
 	}
 }
 

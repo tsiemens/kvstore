@@ -148,6 +148,6 @@ func HandleMembershipQuery(handler *MessageHandler, msg api.Message, recvAddr *n
 	}
 }
 
-func (handler *MessageHandler) HandleShutdown(msg api.Message, recvAddr *net.UDPAddr) {
+func HandleShutdown(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
 	log.I.Fatal("Shutdown Command recieved, aborting program")
 }
