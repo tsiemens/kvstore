@@ -10,6 +10,9 @@ For the first iteration of the key value store, the system was kept simple. Each
 
 Additionally, the nodes can currently execute a membership protocol. They use an initial contact point (chose one out of well known host in config file), after which they can contact any node to update their membership. This has no impact on A3, however the implementation of A2 was modified to use this membership list in place of the static list of nodes previously used.
 
+#### Additional Response Codes
+* 0x09: The message structure for the command was invalid (eg. mismatched value length, missing data)
+
 #### Test Cases
 The following test cases were performed in this order:
 * GET a value with a key that doesn't exist in the store (Result: ERROR)
