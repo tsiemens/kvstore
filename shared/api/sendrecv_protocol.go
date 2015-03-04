@@ -50,6 +50,8 @@ func SendRecv(url string, buildMsg MessageBuilder) (Message, error) {
 		MsgUID:     msgToSend.UID(),
 	}
 
+	log.D.Printf("Sending msg type %x to %v\n", msgToSend.Command(), remoteAddr.String())
+
 	// Try [retries] times to receive a message.
 	// Timeout at [initialTimeout] ms, doubling the timeout after each retry
 	timeout := initialTimeout
@@ -103,11 +105,12 @@ func (self *protocolReceiver) recvMsg(timeoutms int) (Message, net.Error) {
 		} else if recvAddr.IP.Equal(self.RemoteAddr.IP) &&
 			recvAddr.Port == self.RemoteAddr.Port {
 
-			log.D.Printf("Received [% x]\n", buff[0:60])
+			log.D.Printf("Received msg type %x [% x]\n", buff[16], buff[0:60])
 			serverMsg, err := ParseMessage(buff[0:n], RespMessageParsers)
 			if err == nil && serverMsg.UID() == self.MsgUID {
 				return serverMsg, nil
 			}
+
 			// Ignore malformatted messages, or ones not for our message
 			log.D.Printf("Ignoring malformed message: %v", err)
 		}
