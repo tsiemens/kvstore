@@ -266,3 +266,19 @@ func handleMembership(msg api.Message, recvAddr *net.UDPAddr) {
 func HandleShutdown(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
 	log.I.Fatal("Shutdown Command recieved, aborting program")
 }
+
+func HandleStorePush(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
+	valueMsg := msg.(*api.ValueDgram)
+	keyVals, err := protocol.ParseStorePushMsgValue(valueMsg.Value)
+	if err != nil {
+		log.E.Println("Failed to parse incoming store push data")
+		return
+	}
+
+	// for now, receiving this message will just cause this node to store all the contents regardless of key range. Key overflow is not an issue now
+	nodeStore := node.GetProcessNode().Store
+	for key, val := range keyVals {
+		nodeStore.Put(key, val)
+	}
+	protocol.ReplyToStorePush(handler.Conn, recvAddr, handler.Cache, msg)
+}
