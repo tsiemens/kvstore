@@ -4,6 +4,7 @@ import (
 	"net"
 
 	"encoding/json"
+	clientapi "github.com/tsiemens/kvstore/client/api"
 	"github.com/tsiemens/kvstore/server/config"
 	"github.com/tsiemens/kvstore/server/node"
 	"github.com/tsiemens/kvstore/server/protocol"
@@ -16,11 +17,25 @@ import (
 
 func HandleGet(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
 	keyMsg := msg.(*api.KeyDgram)
-	val, err := node.GetProcessNode().Store.Get(store.Key(keyMsg.Key))
-	if err != nil {
-		log.E.Println(err)
+	ownerId, owner := node.GetProcessNode().GetKeyOwner(keyMsg.Key)
+	var replyMsg api.Message
+
+	if ownerId == node.GetProcessNode().ID {
+		value, err := node.GetProcessNode().Store.Get(store.Key(keyMsg.Key))
+		if err != nil {
+			log.E.Println(err)
+		}
+		replyMsg = api.NewValueDgram(msg.UID(), api.RespOk, value)
+	} else {
+		value, err := clientapi.Get(owner.Addr.String(), keyMsg.Key)
+		if err != nil {
+			log.E.Println(err)
+			//TODO handle different errors
+		} else {
+			replyMsg = api.NewValueDgram(msg.UID(), api.RespOk, value)
+		}
 	}
-	protocol.ReplyToGet(handler.Conn, recvAddr, msg, val)
+	protocol.ReplyToGet(handler.Conn, recvAddr, replyMsg)
 }
 
 func HandlePut(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {

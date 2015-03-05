@@ -9,15 +9,8 @@ import (
 	"time"
 )
 
-func ReplyToGet(conn *net.UDPConn, recvAddr *net.UDPAddr,
-	requestMsg api.Message, value []byte) {
-	var reply api.Message
-	if value != nil {
-		reply = api.NewValueDgram(requestMsg.UID(), api.RespOk, value)
-	} else {
-		reply = api.NewBaseDgram(requestMsg.UID(), api.RespInvalidKey)
-	}
-	conn.WriteTo(reply.Bytes(), recvAddr)
+func ReplyToGet(conn *net.UDPConn, recvAddr *net.UDPAddr, replyMsg api.Message) {
+	conn.WriteTo(replyMsg.Bytes(), recvAddr)
 }
 
 func ReplyToPut(conn *net.UDPConn, recvAddr *net.UDPAddr,

@@ -181,3 +181,17 @@ func PeerListString(peers map[store.Key]*Peer) string {
 	}
 	return s
 }
+
+func (node *Node) GetKeyOwner(key store.Key) (store.Key, *Peer) {
+	var ownerId store.Key = node.ID
+	var owner *Peer
+	for peerId, peer := range node.KnownPeers {
+		if peerId.LessThan(key) {
+			if peerId.LessThan(ownerId) {
+				ownerId = peerId
+				owner = peer
+			}
+		}
+	}
+	return ownerId, owner
+}

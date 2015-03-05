@@ -15,6 +15,9 @@ import "github.com/tsiemens/kvstore/shared/util"
 const CmdPut = 0x01
 const CmdGet = 0x02
 const CmdRemove = 0x03
+const CmdIntraPut = 0x04
+const CmdIntraGet = 0x05
+const CmdIntraRemove = 0x06
 const CmdStatusUpdate = 0x21
 const CmdAdhocUpdate = 0x22
 const CmdMembership = 0x23
@@ -31,6 +34,7 @@ const RespUnknownCommand = 0x05
 const RespStatusUpdateFail = 0x06
 const RespStatusUpdateOK = 0x07
 const RespAdhocUpdateOK = 0x08
+const RespInvalidNode = 0x09
 
 type BaseDgram struct {
 	uid     [16]byte
