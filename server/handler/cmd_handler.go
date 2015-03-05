@@ -23,8 +23,10 @@ func HandleGet(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) 
 		value, err := node.GetProcessNode().Store.Get(store.Key(keyMsg.Key))
 		if err != nil {
 			log.E.Println(err)
+			replyMsg = api.NewBaseDgram(msg.UID(), api.RespInvalidKey)
+		} else {
+			replyMsg = api.NewValueDgram(msg.UID(), api.RespOk, value)
 		}
-		replyMsg = api.NewValueDgram(msg.UID(), api.RespOk, value)
 	} else {
 		value, err := clientapi.Get(owner.Addr.String(), keyMsg.Key)
 		if err != nil {
@@ -39,15 +41,31 @@ func HandleGet(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) 
 
 func HandlePut(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
 	keyValMsg := msg.(*api.KeyValueDgram)
-	err := node.GetProcessNode().Store.Put(
-		store.Key(keyValMsg.Key),
-		keyValMsg.Value)
-	success := true
-	if err != nil {
-		success = false
-		log.E.Println(err)
+	ownerId, owner := node.GetProcessNode().GetKeyOwner(keyValMsg.Key)
+	log.D.Printf("OwnerId is %v\n", ownerId.String())
+	log.D.Printf("my Id is %v\n", node.GetProcessNode().ID.String())
+	var replyMsg api.Message
+
+	if ownerId == node.GetProcessNode().ID {
+		err := node.GetProcessNode().Store.Put(
+			store.Key(keyValMsg.Key),
+			keyValMsg.Value)
+		if err != nil {
+			log.E.Println(err)
+			replyMsg = api.NewBaseDgram(msg.UID(), api.RespInvalidKey)
+		} else {
+			replyMsg = api.NewValueDgram(msg.UID(), api.RespOk, make([]byte, 0, 0))
+		}
+	} else {
+		err := clientapi.Put(owner.Addr.String(), keyValMsg.Key, keyValMsg.Value)
+		if err != nil {
+			log.E.Println(err)
+			//TODO handle different errors
+		} else {
+			replyMsg = api.NewValueDgram(msg.UID(), api.RespOk, make([]byte, 0, 0))
+		}
 	}
-	protocol.ReplyToPut(handler.Conn, recvAddr, handler.Cache, msg, success)
+	protocol.ReplyToPut(handler.Conn, recvAddr, handler.Cache, replyMsg)
 }
 
 func HandleRemove(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {

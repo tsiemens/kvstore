@@ -220,7 +220,7 @@ func (node *Node) GetKeyOwner(key store.Key) (store.Key, *Peer) {
 	var ownerId store.Key = node.ID
 	var owner *Peer
 	for peerId, peer := range node.KnownPeers {
-		if peerId.LessThan(key) {
+		if peerId.GreaterThan(key) {
 			if peerId.LessThan(ownerId) {
 				ownerId = peerId
 				owner = peer

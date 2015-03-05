@@ -15,14 +15,8 @@ func ReplyToGet(conn *net.UDPConn, recvAddr *net.UDPAddr, replyMsg api.Message) 
 }
 
 func ReplyToPut(conn *net.UDPConn, recvAddr *net.UDPAddr, cache *cache.Cache,
-	requestMsg api.Message, success bool) {
-	var reply api.Message
-	if success {
-		reply = api.NewValueDgram(requestMsg.UID(), api.RespOk, make([]byte, 0, 0))
-	} else {
-		reply = api.NewBaseDgram(requestMsg.UID(), api.RespInvalidKey)
-	}
-	cache.SendReply(conn, reply, recvAddr)
+	replyMsg api.Message) {
+	cache.SendReply(conn, replyMsg, recvAddr)
 }
 
 func ReplyToRemove(conn *net.UDPConn, recvAddr *net.UDPAddr, cache *cache.Cache,
