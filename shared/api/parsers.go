@@ -1,15 +1,17 @@
 package api
 
 var CmdMessageParsers = map[byte]MessagePayloadParser{
-	CmdPut:                ParseKeyValueDgram,
-	CmdGet:                ParseKeyDgram,
-	CmdRemove:             ParseKeyDgram,
-	CmdShutdown:           ParseKeyDgram,
-	CmdStatusUpdate:       ParseKeyValueDgram,
-	CmdAdhocUpdate:        ParseKeyValueDgram,
-	CmdMembership:         ParseKeyValueDgram,
-	CmdMembershipResponse: ParseKeyValueDgram,
-	CmdMembershipQuery:    ParseBaseDgram,
+	CmdPut:                     ParseKeyValueDgram,
+	CmdGet:                     ParseKeyDgram,
+	CmdRemove:                  ParseKeyDgram,
+	CmdShutdown:                ParseKeyDgram,
+	CmdStatusUpdate:            ParseKeyValueDgram,
+	CmdAdhocUpdate:             ParseKeyValueDgram,
+	CmdMembership:              ParseKeyValueDgram,
+	CmdMembershipExchange:      ParseKeyValueDgram,
+	CmdMembershipQuery:         ParseBaseDgram,
+	CmdMembershipFailure:       ParseKeyValueDgram,
+	CmdMembershipFailureGossip: ParseKeyValueDgram,
 }
 
 var RespMessageParsers = map[byte]MessagePayloadParser{

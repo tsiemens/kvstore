@@ -3,8 +3,8 @@ package handler
 import (
 	"fmt"
 	"github.com/tsiemens/kvstore/server/cache"
+	"github.com/tsiemens/kvstore/server/config"
 	"github.com/tsiemens/kvstore/server/protocol"
-	"github.com/tsiemens/kvstore/server/store"
 	"github.com/tsiemens/kvstore/shared/api"
 	"github.com/tsiemens/kvstore/shared/log"
 	"github.com/tsiemens/kvstore/shared/util"
@@ -19,22 +19,49 @@ type MessageHandler struct {
 	Conn              *net.UDPConn
 	cmdHandlers       map[byte]CmdHandler
 	PacketLossPercent int
-	statusKey         store.Key
-	shouldGossip      bool
+	GossipKeyMap      map[string]bool
 	Cache             *cache.Cache
 }
 
 func NewDefaultCmdHandlerSet() map[byte]CmdHandler {
 	return map[byte]CmdHandler{
-		api.CmdPut:                HandlePut,
-		api.CmdGet:                HandleGet,
-		api.CmdRemove:             HandleRemove,
-		api.CmdStatusUpdate:       HandleStatusUpdate,
-		api.CmdAdhocUpdate:        HandleAdhocUpdate,
-		api.CmdMembership:         HandleMembershipMsg,
-		api.CmdMembershipResponse: HandleMembershipResponse,
-		api.CmdMembershipQuery:    HandleMembershipQuery,
-		api.CmdShutdown:           HandleShutdown,
+		api.CmdPut:                     HandlePut,
+		api.CmdGet:                     HandleGet,
+		api.CmdRemove:                  HandleRemove,
+		api.CmdShutdown:                HandleShutdown,
+		api.CmdStatusUpdate:            HandleStatusUpdate,
+		api.CmdAdhocUpdate:             HandleAdhocUpdate,
+		api.CmdMembership:              HandleMembershipMsg,
+		api.CmdMembershipExchange:      HandleMembershipMsgExchange,
+		api.CmdMembershipQuery:         HandleMembershipQuery,
+		api.CmdMembershipFailure:       HandleMembershipMsg,
+		api.CmdMembershipFailureGossip: HandleMembershipFailureGossip,
+	}
+}
+
+func (handler *MessageHandler) IsNewMessage(key [32]byte) bool {
+	if _, ok := handler.GossipKeyMap[string(key[:])]; ok {
+		return false
+	}
+	return true
+}
+
+func (handler *MessageHandler) ShouldGossip(key [32]byte) bool {
+	conf := config.GetConfig()
+	if shouldGossip, ok := handler.GossipKeyMap[string(key[:])]; ok {
+		if shouldGossip {
+			if util.Rand.Intn(conf.K) == conf.K-1 {
+				handler.GossipKeyMap[string(key[:])] = false
+				return false
+			} else {
+				return true
+			}
+		} else {
+			return false
+		}
+	} else {
+		handler.GossipKeyMap[string(key[:])] = true
+		return true
 	}
 }
 
@@ -49,7 +76,7 @@ func NewMessageHandler(conn *net.UDPConn,
 		Conn:              conn,
 		cmdHandlers:       cmdHandlers,
 		PacketLossPercent: lossPercent % 101,
-		shouldGossip:      true,
+		GossipKeyMap:      make(map[string]bool, 0),
 		Cache:             cache.New(),
 	}
 }

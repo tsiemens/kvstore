@@ -73,7 +73,7 @@ func ReplyToMembershipQuery(conn *net.UDPConn, recvAddr *net.UDPAddr, cache *cac
 	requestMsg api.Message, myNodeId [32]byte,
 	peers map[store.Key]*node.Peer) error {
 
-	peerList := newPeerList(peers)
+	peerList := NewPeerList(peers)
 	// Append this node to list
 	peerList.Peers[api.KeyHex(store.Key(myNodeId))] = node.Peer{
 		Online:   true,

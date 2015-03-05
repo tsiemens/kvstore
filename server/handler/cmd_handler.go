@@ -11,7 +11,6 @@ import (
 	"github.com/tsiemens/kvstore/shared/api"
 	"github.com/tsiemens/kvstore/shared/exec"
 	"github.com/tsiemens/kvstore/shared/log"
-	"github.com/tsiemens/kvstore/shared/util"
 )
 
 func HandleGet(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
@@ -48,19 +47,10 @@ func HandleRemove(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAdd
 }
 
 func HandleStatusUpdate(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
-	log.D.Println("Status Update handle called")
 	conf := config.GetConfig()
+	log.D.Println("Status Update handle called")
 	keyValMsg := msg.(*api.KeyValueDgram)
-	if handler.statusKey.Equals(keyValMsg.Key) {
-		// status already reached node
-		log.D.Println("Status already received")
-		if util.Rand.Intn(conf.K) == conf.K-1 {
-			handler.shouldGossip = false
-			return
-		}
-	} else {
-		handler.shouldGossip = true
-		handler.statusKey = keyValMsg.Key
+	if handler.IsNewMessage(keyValMsg.Key) {
 		dataDelimiter := "\t\n\t\n"
 		// TODO handle failures properly
 		// Commented out all the identifiers because it was easier to create the html
@@ -76,47 +66,52 @@ func HandleStatusUpdate(handler *MessageHandler, msg api.Message, recvAddr *net.
 		protocol.ReplyToStatusUpdateServer(handler.Conn, conf.StatusServerAddr, handler.Cache, msg, []byte(deploymentSpace+dataDelimiter+diskSpace+dataDelimiter+uptime+dataDelimiter+currentload), success)
 	}
 
-	if handler.shouldGossip {
+	if handler.ShouldGossip(keyValMsg.Key) {
 		protocol.Gossip(handler.Conn, keyValMsg)
 	}
 }
 
 func HandleAdhocUpdate(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
-	log.D.Println("Adhoc Update handle called")
 	conf := config.GetConfig()
 	keyValMsg := msg.(*api.KeyValueDgram)
-	log.I.Println(keyValMsg.Key)
-	log.I.Println(handler.statusKey.String())
-	if handler.statusKey.Equals(keyValMsg.Key) {
-		// status already reached node
-		log.D.Println("Status already received")
-		if util.Rand.Intn(conf.K) == conf.K-1 {
-			handler.shouldGossip = false
-			return
-		}
-	} else {
-		handler.shouldGossip = true
-		handler.statusKey = keyValMsg.Key
+	if handler.IsNewMessage(keyValMsg.Key) {
 		success, status := exec.RunCommand(string(keyValMsg.Value))
 		protocol.ReplyToStatusUpdateServer(handler.Conn, conf.StatusServerAddr, handler.Cache, msg, []byte(status), success)
 	}
 
-	if handler.shouldGossip {
+	if handler.ShouldGossip(keyValMsg.Key) {
 		protocol.Gossip(handler.Conn, keyValMsg)
 	}
 }
 
+func HandleMembershipMsgExchange(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
+	handleMembership(&msg, recvAddr)
+	thisNode := node.GetProcessNode()
+	protocol.SendMembershipMsg(handler.Conn, recvAddr,
+		thisNode.ID, thisNode.KnownPeers, api.CmdMembership)
+}
+
 func HandleMembershipMsg(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
-	handleMembership(handler, msg, recvAddr, true)
+	handleMembership(&msg, recvAddr)
 }
 
-func HandleMembershipResponse(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
-	handleMembership(handler, msg, recvAddr, false)
+func HandleMembershipFailureGossip(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
+	handleMembership(&msg, recvAddr)
+	if handler.ShouldGossip(msg.(*api.KeyValueDgram).Key) {
+		protocol.Gossip(handler.Conn, msg.(*api.KeyValueDgram))
+	}
 }
 
-func handleMembership(handler *MessageHandler, msg api.Message,
-	recvAddr *net.UDPAddr, reply bool) {
-	if keyValMsg, ok := msg.(*api.KeyValueDgram); ok {
+func HandleMembershipQuery(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
+	err := protocol.ReplyToMembershipQuery(handler.Conn, recvAddr, handler.Cache,
+		msg, node.GetProcessNode().ID, node.GetProcessNode().KnownPeers)
+	if err != nil {
+		log.E.Println(err)
+	}
+}
+
+func handleMembership(msg *api.Message, recvAddr *net.UDPAddr) {
+	if keyValMsg, ok := (*msg).(*api.KeyValueDgram); ok {
 		nodeId := keyValMsg.Key
 		peers := &protocol.PeerList{}
 		err := json.Unmarshal(keyValMsg.Value, peers)
@@ -125,26 +120,11 @@ func handleMembership(handler *MessageHandler, msg api.Message,
 		} else {
 			thisNode := node.GetProcessNode()
 			thisNode.UpdatePeers(peers.PointerMap(), nodeId, recvAddr)
-			if reply {
-				err = protocol.SendMembershipMsg(handler.Conn, recvAddr,
-					thisNode.ID, thisNode.KnownPeers, true)
-				if err != nil {
-					thisNode.SetPeerOffline(nodeId)
-				}
-			}
-			log.D.Printf("Currently known peers: [\n%s\n]\n",
-				node.PeerListString(thisNode.KnownPeers))
+			//log.D.Printf("Currently known peers: [\n%s\n]\n",
+			//	node.PeerListString(thisNode.KnownPeers))
 		}
 	} else {
 		log.E.Println("Received invalid membership datagram")
-	}
-}
-
-func HandleMembershipQuery(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
-	err := protocol.ReplyToMembershipQuery(handler.Conn, recvAddr, handler.Cache, msg,
-		node.GetProcessNode().ID, node.GetProcessNode().KnownPeers)
-	if err != nil {
-		log.E.Println(err)
 	}
 }
 

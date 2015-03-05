@@ -19,8 +19,10 @@ const CmdShutdown = 0x04
 const CmdStatusUpdate = 0x21
 const CmdAdhocUpdate = 0x22
 const CmdMembership = 0x23
-const CmdMembershipResponse = 0x24
-const CmdMembershipQuery = 0x25
+const CmdMembershipExchange = 0x25
+const CmdMembershipQuery = 0x27
+const CmdMembershipFailure = 0x28
+const CmdMembershipFailureGossip = 0x29
 
 // Response codes that can be sent back to the client
 const RespOk = 0x00
