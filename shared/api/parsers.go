@@ -4,6 +4,7 @@ var CmdMessageParsers = map[byte]MessagePayloadParser{
 	CmdPut:                     ParseKeyValueDgram,
 	CmdGet:                     ParseKeyDgram,
 	CmdRemove:                  ParseKeyDgram,
+	CmdShutdown:                ParseKeyDgram,
 	CmdStatusUpdate:            ParseKeyValueDgram,
 	CmdAdhocUpdate:             ParseKeyValueDgram,
 	CmdMembership:              ParseKeyValueDgram,

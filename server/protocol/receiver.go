@@ -10,12 +10,13 @@ type MessageHandler interface {
 
 func LoopReceiver(conn *net.UDPConn, handler MessageHandler) error {
 	for {
-		msg, recvAddr, err := recvFrom(conn)
+		msg, recvAddr, err, errMsg := recvFrom(conn)
 		if err != nil {
-			log.E.Println(err)
 			if !err.Temporary() {
 				return err
 			}
+		} else if errMsg != nil {
+			conn.WriteTo(errMsg.Bytes(), recvAddr)
 		} else {
 			log.D.Printf("Received message type %x from %v\n", msg.Command(), recvAddr)
 			go handler.HandleMessage(msg, recvAddr)
@@ -23,23 +24,27 @@ func LoopReceiver(conn *net.UDPConn, handler MessageHandler) error {
 	}
 }
 
-func recvFrom(conn *net.UDPConn) (api.Message, *net.UDPAddr, net.Error) {
+/* Receives a message and parses it.
+ * Returns the message, the address received from,
+ * a possible error or an error message to return. */
+func recvFrom(conn *net.UDPConn) (api.Message, *net.UDPAddr, net.Error, api.Message) {
 	buff := make([]byte, api.MaxMessageSize)
 
 	for {
 		n, recvAddr, err := conn.ReadFromUDP(buff)
 		if err != nil {
-			if netErr, ok := err.(net.Error); ok {
-				return nil, recvAddr, netErr
-			}
 			log.E.Println(err)
+			if netErr, ok := err.(net.Error); ok {
+				return nil, recvAddr, netErr, nil
+			}
 		} else {
 			//log.D.Printf("Received [% x]\n", buff[0:60])
-			requestMsg, err := api.ParseMessage(buff[0:n], api.CmdMessageParsers)
+			requestMsg, err, errMsg := api.ParseMessage(buff[0:n], api.CmdMessageParsers)
 			if err != nil {
 				log.E.Println(err)
+				return nil, recvAddr, nil, errMsg
 			} else {
-				return requestMsg, recvAddr, nil
+				return requestMsg, recvAddr, nil, nil
 			}
 		}
 	}

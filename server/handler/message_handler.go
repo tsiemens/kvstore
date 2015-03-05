@@ -2,6 +2,7 @@ package handler
 
 import (
 	"fmt"
+	"github.com/tsiemens/kvstore/server/cache"
 	"github.com/tsiemens/kvstore/server/config"
 	"github.com/tsiemens/kvstore/server/protocol"
 	"github.com/tsiemens/kvstore/shared/api"
@@ -19,6 +20,7 @@ type MessageHandler struct {
 	cmdHandlers       map[byte]CmdHandler
 	PacketLossPercent int
 	GossipKeyMap      map[string]bool
+	Cache             *cache.Cache
 }
 
 func NewDefaultCmdHandlerSet() map[byte]CmdHandler {
@@ -26,6 +28,7 @@ func NewDefaultCmdHandlerSet() map[byte]CmdHandler {
 		api.CmdPut:                     HandlePut,
 		api.CmdGet:                     HandleGet,
 		api.CmdRemove:                  HandleRemove,
+		api.CmdShutdown:                HandleShutdown,
 		api.CmdStatusUpdate:            HandleStatusUpdate,
 		api.CmdAdhocUpdate:             HandleAdhocUpdate,
 		api.CmdMembership:              HandleMembershipMsg,
@@ -74,6 +77,7 @@ func NewMessageHandler(conn *net.UDPConn,
 		cmdHandlers:       cmdHandlers,
 		PacketLossPercent: lossPercent % 101,
 		GossipKeyMap:      make(map[string]bool, 0),
+		Cache:             cache.New(),
 	}
 }
 
@@ -86,11 +90,21 @@ func (handler *MessageHandler) HandleMessage(msg api.Message, recvAddr *net.UDPA
 		log.D.Println("Opps! Packet dropped!")
 		return
 	}
+
+	if wasCached, cachedReply := handler.Cache.StoreAndGetReply(msg); wasCached {
+		log.D.Println("Cached message received")
+		if cachedReply != nil {
+			log.D.Println("Replying with cached reply")
+			handler.Conn.WriteTo(cachedReply.Bytes(), recvAddr)
+		}
+		return
+	}
+
 	log.D.Println("Handling!")
 	if cmdHandler, ok := handler.cmdHandlers[msg.Command()]; ok {
 		cmdHandler(handler, msg, recvAddr)
 	} else {
 		log.D.Println(fmt.Sprintf("No handler for command 0x%x", msg.Command()))
-		protocol.ReplyToUnknownCommand(handler.Conn, recvAddr, msg)
+		protocol.ReplyToUnknownCommand(handler.Conn, recvAddr, handler.Cache, msg)
 	}
 }
