@@ -3,6 +3,7 @@ package loop
 import (
 	"github.com/tsiemens/kvstore/server/node"
 	"github.com/tsiemens/kvstore/server/protocol"
+	"github.com/tsiemens/kvstore/shared/api"
 	"github.com/tsiemens/kvstore/shared/log"
 	"time"
 )
@@ -26,10 +27,13 @@ func MembershipUpdateLoop() {
 		randPeer, peerId := thisNode.RandomPeer()
 		if randPeer != nil {
 			err := protocol.SendMembershipMsg(thisNode.Conn, randPeer.Addr,
-				thisNode.ID, thisNode.KnownPeers, false)
+				thisNode.ID, thisNode.KnownPeers, api.CmdMembershipExchange)
 			if err != nil {
 				log.E.Println(err)
-				thisNode.SetPeerOffline(*peerId)
+				if peerId != nil {
+					thisNode.SetPeerOffline(*peerId)
+				}
+
 			}
 		}
 		log.D.Printf("Currently known peers: [\n%s\n]\n",

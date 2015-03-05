@@ -18,7 +18,7 @@ func LoopReceiver(conn *net.UDPConn, handler MessageHandler) error {
 		} else if errMsg != nil {
 			conn.WriteTo(errMsg.Bytes(), recvAddr)
 		} else {
-			log.D.Println("Received message from", recvAddr)
+			log.D.Printf("Received message type %x from %v\n", msg.Command(), recvAddr)
 			go handler.HandleMessage(msg, recvAddr)
 		}
 	}

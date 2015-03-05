@@ -14,7 +14,7 @@ type PeerList struct {
 	Peers map[string]node.Peer
 }
 
-func newPeerList(peers map[store.Key]*node.Peer) *PeerList {
+func NewPeerList(peers map[store.Key]*node.Peer) *PeerList {
 	pl := map[string]node.Peer{}
 	for key, peer := range peers {
 		pl[api.KeyHex(key)] = node.Peer{Online: peer.Online,
@@ -42,21 +42,15 @@ func (pl *PeerList) PointerMap() map[store.Key]*node.Peer {
 }
 
 func SendMembershipMsg(conn *net.UDPConn, addr *net.UDPAddr, myNodeId [32]byte,
-	peers map[store.Key]*node.Peer, isReply bool) error {
-	peerdata, err := json.Marshal(newPeerList(peers))
+	peers map[store.Key]*node.Peer, command byte) error {
+	peerdata, err := json.Marshal(NewPeerList(peers))
 	if err != nil {
 		return err
 	}
-	return api.Send(conn, addr.String(), func(addr *net.UDPAddr) api.Message {
-		var code byte
-		if isReply { // I really wish go had ternary operators -_-
-			code = api.CmdMembership
-		} else {
-			code = api.CmdMembershipResponse
-		}
-		return api.NewKeyValueDgram(api.NewMessageUID(addr),
-			code, myNodeId, peerdata)
-	})
+	msg := func(addr *net.UDPAddr) api.Message {
+		return api.NewKeyValueDgram(api.NewMessageUID(addr), command, myNodeId, peerdata)
+	}
+	return api.Send(conn, addr.String(), msg)
 }
 
 func SendMembershipQuery(url string) (map[store.Key]*node.Peer, error) {

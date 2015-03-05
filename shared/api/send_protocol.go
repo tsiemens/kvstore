@@ -46,7 +46,7 @@ func Send(conn *net.UDPConn, url string, buildMsg MessageBuilder) error {
 	}
 
 	msgToSend := buildMsg(conn.LocalAddr().(*net.UDPAddr))
-	log.D.Println("Sending msg to " + remoteAddr.String())
+	log.D.Printf("Sending msg type %x to %v\n", msgToSend.Command(), remoteAddr.String())
 	//log.D.Printf("Sending: % x\n", msgToSend.Bytes())
 	conn.WriteTo(msgToSend.Bytes(), remoteAddr)
 	return nil
