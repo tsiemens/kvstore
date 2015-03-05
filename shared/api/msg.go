@@ -15,9 +15,10 @@ import "github.com/tsiemens/kvstore/shared/util"
 const CmdPut = 0x01
 const CmdGet = 0x02
 const CmdRemove = 0x03
-const CmdIntraPut = 0x04
-const CmdIntraGet = 0x05
-const CmdIntraRemove = 0x06
+const CmdShutdown = 0x04
+const CmdIntraPut = 0x05
+const CmdIntraGet = 0x06
+const CmdIntraRemove = 0x07
 const CmdStatusUpdate = 0x21
 const CmdAdhocUpdate = 0x22
 const CmdMembership = 0x23
@@ -34,7 +35,8 @@ const RespUnknownCommand = 0x05
 const RespStatusUpdateFail = 0x06
 const RespStatusUpdateOK = 0x07
 const RespAdhocUpdateOK = 0x08
-const RespInvalidNode = 0x09
+const RespMalformedDatagram = 0x09
+const RespInvalidNode = 0x10
 
 type BaseDgram struct {
 	uid     [16]byte
@@ -121,7 +123,7 @@ func NewMessageUID(addr *net.UDPAddr) [16]byte {
 		binary.Write(buf, binary.LittleEndian, util.UnixMilliTimestamp()) != nil {
 		log.E.Panic("binary.Write failed!")
 	}
-	return byteArray16(buf.Bytes())
+	return ByteArray16(buf.Bytes())
 }
 
 // Returns byte datagram representation of message
@@ -160,20 +162,30 @@ func (msg *ValueDgram) Bytes() []byte {
 type MessagePayloadParser func(uid [16]byte, cmd byte,
 	payload []byte) (Message, error)
 
+/* Parses message.
+ * Returns the message, or an error, plus a response message for the error */
 func ParseMessage(dgram []byte,
-	parserMap map[byte]MessagePayloadParser) (Message, error) {
+	parserMap map[byte]MessagePayloadParser) (Message, error, Message) {
 
 	if len(dgram) < 17 {
-		return nil, errors.New("Datagram header improperly formatted")
+		return nil, errors.New("Datagram header improperly formatted"), nil
 	}
 
 	uid := dgram[:16]
 	command := dgram[16]
 
 	if parser, ok := parserMap[command]; ok {
-		return parser(byteArray16(uid), command, dgram[17:])
+		msg, err := parser(ByteArray16(uid), command, dgram[17:])
+		if err != nil {
+			return nil, err,
+				NewBaseDgram(ByteArray16(uid), RespMalformedDatagram)
+		} else {
+			return msg, nil, nil
+		}
 	} else {
-		return nil, errors.New(fmt.Sprintf("Could not parse unrecognized command 0x%x", command))
+		return nil,
+			errors.New(fmt.Sprintf("Could not parse unrecognized command 0x%x", command)),
+			NewBaseDgram(ByteArray16(uid), RespUnknownCommand)
 	}
 }
 
@@ -191,7 +203,7 @@ func parseKey(b []byte) ([32]byte, error) {
 		return [32]byte{}, errors.New("Too few bytes to parse key")
 	}
 
-	return byteArray32(key), nil
+	return ByteArray32(key), nil
 }
 
 func ParseKeyDgram(uid [16]byte, cmd byte, payload []byte) (Message, error) {

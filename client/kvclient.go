@@ -66,16 +66,9 @@ func getCommandLine() *KVStoreCommandLine {
 func printHelp() {
 	log.Out.Println("Client for the KVStore Key Value Store.\n\n" +
 		"Usage:\n    client [OPTIONS] COMMAND HOST:PORT [ARGS...]\n" +
-		"    eg. $ client get 168.235.153.23:5627 909090\n\n" +
+		"    eg. $ client get 168.235.153.23:5627 foo\n\n" +
 		"Commands:")
 	commands.PrintCommands()
-	//"get	Gets the value for a key.\n" +
-	//"		ARGS: KEY (32 bytes, in hexadecimal)\n" +
-	//"put	Sets the value for a key.\n" +
-	//"		ARGS: KEY (32 bytes, in hexadecimal)\n" +
-	//"			  VALUE (Defaults to ascii. Other format flags may be added later)\n" +
-	//"delete	Deletes the key value pair.\n" +
-	//"		ARGS: KEY (32 bytes, in hexadecimal)\n\n" +
 	log.Out.Println("\nFlags:")
 	flag.PrintDefaults()
 }

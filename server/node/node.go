@@ -10,6 +10,7 @@ import (
 	"github.com/tsiemens/kvstore/shared/log"
 	"github.com/tsiemens/kvstore/shared/util"
 	"net"
+	"sort"
 	"strconv"
 	"time"
 )
@@ -19,11 +20,12 @@ const TimeTillMemberDrop = time.Minute * 5
 
 // Node represents this machine, as one in a cluster of nodes.
 type Node struct {
-	ID         store.Key // Not needed just yet, but it will later
-	KnownPeers map[store.Key]*Peer
-	Lock       util.Semaphore
-	Conn       *net.UDPConn
-	Store      *store.Store
+	ID          store.Key // Not needed just yet, but it will later
+	KnownPeers  map[store.Key]*Peer
+	NodeKeyList []store.Key
+	Lock        util.Semaphore
+	Conn        *net.UDPConn
+	Store       *store.Store
 }
 
 type Peer struct {
@@ -36,13 +38,14 @@ var node *Node
 
 func Init(localAddr *net.UDPAddr, conn *net.UDPConn, procStore *store.Store) {
 	node = &Node{
-		ID:         createNodeID(localAddr),
-		KnownPeers: map[store.Key]*Peer{},
-		Lock:       util.NewSemaphore(),
-		Conn:       conn,
-		Store:      procStore,
+		ID:          createNodeID(localAddr),
+		KnownPeers:  map[store.Key]*Peer{},
+		NodeKeyList: []store.Key{},
+		Lock:        util.NewSemaphore(),
+		Conn:        conn,
+		Store:       procStore,
 	}
-
+	node.UpdateSortedKeys()
 	log.I.Println("Node initialized with ID: " + node.ID.String())
 }
 
@@ -132,6 +135,17 @@ func (node *Node) CleanupKnownNodes() {
 	}
 }
 
+func (node *Node) UpdateSortedKeys() {
+	node.NodeKeyList = make([]store.Key, len(node.KnownPeers)+1)
+	i := 0
+	for k, _ := range node.KnownPeers {
+		node.NodeKeyList[i] = k
+		i++
+	}
+	node.NodeKeyList[i] = node.ID
+	sort.Sort(store.Keys(node.NodeKeyList))
+}
+
 func (node *Node) UpdatePeers(peers map[store.Key]*Peer, sendingPeerId store.Key, sendingAddr *net.UDPAddr) {
 	node.Lock.Lock()
 	defer node.Lock.Unlock()
@@ -163,12 +177,32 @@ func (node *Node) UpdatePeers(peers map[store.Key]*Peer, sendingPeerId store.Key
 	sendingPeer.Addr = sendingAddr
 
 	node.CleanupKnownNodes()
+	node.UpdateSortedKeys()
 	log.I.Println("Done.")
 }
 
 func (n *Node) SetPeerOffline(peerId store.Key) {
 	if peer, ok := node.KnownPeers[peerId]; ok {
 		peer.Online = false
+	}
+}
+
+/* Returns the peer that should handle the given key.
+ * Returns nil peer if this node is responsible.
+ * A peer is responsible if it is the next higher or equal to the key
+ */
+func (n *Node) GetPeerResponsibleForKey(key store.Key) (*store.Key, *Peer) {
+	responsibleKey := n.NodeKeyList[0]
+	for _, nodekey := range n.NodeKeyList {
+		if nodekey.GreaterEquals(key) {
+			responsibleKey = nodekey
+			break
+		}
+	}
+	if responsibleKey == n.ID {
+		return &responsibleKey, nil
+	} else {
+		return &responsibleKey, n.KnownPeers[responsibleKey]
 	}
 }
 

@@ -1,10 +1,17 @@
 package commands
 
-import "errors"
-import "github.com/tsiemens/kvstore/shared/api"
-import clientapi "github.com/tsiemens/kvstore/client/api"
-import "github.com/tsiemens/kvstore/shared/log"
-import "crypto/rand"
+import (
+	"crypto/rand"
+	"crypto/sha256"
+	"errors"
+	clientapi "github.com/tsiemens/kvstore/client/api"
+	"github.com/tsiemens/kvstore/shared/api"
+	"github.com/tsiemens/kvstore/shared/log"
+)
+
+func KeyFromString(keystr string) [32]byte {
+	return sha256.Sum256([]byte(keystr))
+}
 
 func New(cmdstr string) (cmd Command, err error) {
 	switch cmdstr {
@@ -57,7 +64,7 @@ func newGetCommand() *GetCommand {
 	return &GetCommand{BaseCommand{
 		name: "get",
 		desc: "Gets the value for a key.",
-		args: []string{"KEY (32 bytes, in hexadecimal)"},
+		args: []string{"KEY (string)"},
 	}}
 }
 
@@ -66,10 +73,7 @@ func (c *GetCommand) Run(url string, args []string) error {
 		return errors.New("get requires KEY argument")
 	}
 
-	key, err := api.KeyFromHex(args[0])
-	if err != nil {
-		return err
-	}
+	key := KeyFromString(args[0])
 
 	val, err := clientapi.Get(url, key)
 	if err != nil {
@@ -89,7 +93,7 @@ func newPutCommand() *PutCommand {
 	return &PutCommand{BaseCommand{
 		name: "put",
 		desc: "Sets the value for a key.",
-		args: []string{"KEY (32 bytes, in hexadecimal)",
+		args: []string{"KEY (string)",
 			"VALUE (Defaults to ascii. Other format flags may be added later)"},
 	}}
 }
@@ -99,18 +103,15 @@ func (c *PutCommand) Run(url string, args []string) error {
 		return errors.New("put requires KEY and VALUE arguments")
 	}
 
-	key, err := api.KeyFromHex(args[0])
-	if err != nil {
-		return err
-	}
+	key := KeyFromString(args[0])
 
 	value := args[1]
-	err = clientapi.Put(url, key, []byte(value))
+	err := clientapi.Put(url, key, []byte(value))
 	if err != nil {
 		return err
 	}
 
-	log.Out.Printf("Set value of %x to %s\n", key, value)
+	log.Out.Printf("Set value of %s to %s\n", args[0], value)
 	return nil
 }
 
@@ -122,7 +123,7 @@ func newRemoveCommand() *RemoveCommand {
 	return &RemoveCommand{BaseCommand{
 		name: "remove",
 		desc: "Deletes the value for a key.",
-		args: []string{"KEY (32 bytes, in hexadecimal)"},
+		args: []string{"KEY (string)"},
 	}}
 }
 
@@ -131,17 +132,14 @@ func (c *RemoveCommand) Run(url string, args []string) error {
 		return errors.New("remove requires KEY argument")
 	}
 
-	key, err := api.KeyFromHex(args[0])
+	key := KeyFromString(args[0])
+
+	err := clientapi.Remove(url, key)
 	if err != nil {
 		return err
 	}
 
-	err = clientapi.Remove(url, key)
-	if err != nil {
-		return err
-	}
-
-	log.Out.Printf("Deleted %x\n", key)
+	log.Out.Printf("Deleted %s\n", args[0])
 	return nil
 }
 
