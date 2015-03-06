@@ -90,6 +90,7 @@ func HandlePut(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) 
 			replyMsg = api.NewValueDgram(msg.UID(), api.RespOk, make([]byte, 0, 0))
 		}
 		protocol.ReplyToPut(handler.Conn, recvAddr, handler.Cache, replyMsg)
+		return
 	}
 
 	// If this node is not responsible for the key but is expected to be by the sending node,
@@ -145,6 +146,7 @@ func HandleRemove(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAdd
 			replyMsg = api.NewValueDgram(msg.UID(), api.RespOk, make([]byte, 0, 0))
 		}
 		protocol.ReplyToRemove(handler.Conn, recvAddr, handler.Cache, replyMsg)
+		return
 	}
 
 	// If this node is not responsible for the key but is expected to be by the sending node,
