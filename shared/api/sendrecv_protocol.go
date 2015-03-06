@@ -11,6 +11,8 @@ import (
 var initialTimeout = 100
 var retries = 3
 
+var intraNodeTimeout = 50
+
 func ResponseError(msg Message) error {
 	switch msg.Command() {
 	case RespOk:
@@ -55,6 +57,12 @@ func SendRecv(url string, buildMsg MessageBuilder) (Message, error) {
 	// Try [retries] times to receive a message.
 	// Timeout at [initialTimeout] ms, doubling the timeout after each retry
 	timeout := initialTimeout
+	if msgToSend.Command() == CmdIntraGet ||
+		msgToSend.Command() == CmdIntraPut ||
+		msgToSend.Command() == CmdIntraRemove {
+		timeout = intraNodeTimeout
+	}
+
 	var netErr net.Error
 	for tries := retries; tries > 0; tries-- {
 		// Send message/resend if timeout occurred

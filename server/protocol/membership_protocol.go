@@ -53,6 +53,20 @@ func SendMembershipMsg(conn *net.UDPConn, addr *net.UDPAddr, myNodeId [32]byte,
 	return api.Send(conn, addr.String(), msg)
 }
 
+func ReplyMembershipMsg(conn *net.UDPConn, recvAddr *net.UDPAddr, myNodeId [32]byte,
+	peers map[store.Key]*node.Peer, command byte, UID [16]byte) error {
+
+	peerdata, err := json.Marshal(NewPeerList(peers))
+	if err != nil {
+		return err
+	}
+	msg := func(addr *net.UDPAddr) api.Message {
+		return api.NewKeyValueDgram(UID, command, myNodeId, peerdata)
+	}
+	return api.Send(conn, recvAddr.String(), msg)
+
+}
+
 func SendMembershipQuery(url string) (map[store.Key]*node.Peer, error) {
 	msg, err := api.SendRecv(url, func(addr *net.UDPAddr) api.Message {
 		return api.NewBaseDgram(api.NewMessageUID(addr), api.CmdMembershipQuery)

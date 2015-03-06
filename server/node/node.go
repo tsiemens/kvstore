@@ -16,7 +16,7 @@ import (
 )
 
 const timeErr = time.Millisecond * 50
-const TimeTillMemberDrop = time.Minute * 5
+const TimeTillMemberDrop = time.Minute * 1
 
 // Node represents this machine, as one in a cluster of nodes.
 type Node struct {

@@ -5,43 +5,38 @@ import (
 	"net"
 )
 
-func IntraNodeGet(url string, key [32]byte) ([]byte, byte) {
+func IntraNodeGet(url string, msg api.Message) api.Message {
+	keyMsg := msg.(*api.KeyDgram)
 	msg, err := api.SendRecv(url, func(addr *net.UDPAddr) api.Message {
-		return api.NewKeyDgram(api.NewMessageUID(addr), api.CmdIntraGet, key)
+		return api.NewKeyDgram(msg.UID(), api.CmdIntraGet, keyMsg.Key)
 	})
 	if err != nil {
-		return nil, api.RespTimeout
-	} else if cmdErr := api.ResponseError(msg); cmdErr != nil {
-		return nil, msg.Command()
-	} else if vmsg, ok := msg.(*api.ValueDgram); ok {
-		return vmsg.Value, api.RespOk
+		return nil
 	} else {
-		return nil, api.RespInternalError
+		return msg
 	}
 }
 
-func IntraNodePut(url string, key [32]byte, value []byte) byte {
+func IntraNodePut(url string, msg api.Message) api.Message {
+	keyValMsg := msg.(*api.KeyValueDgram)
 	msg, err := api.SendRecv(url, func(addr *net.UDPAddr) api.Message {
-		return api.NewKeyValueDgram(api.NewMessageUID(addr), api.CmdIntraPut, key, value)
+		return api.NewKeyValueDgram(msg.UID(), api.CmdIntraPut, keyValMsg.Key, keyValMsg.Value)
 	})
 	if err != nil {
-		return api.RespTimeout
-	} else if cmdErr := api.ResponseError(msg); cmdErr != nil {
-		return msg.Command()
+		return nil
 	} else {
-		return api.RespOk
+		return msg
 	}
 }
 
-func IntraNodeRemove(url string, key [32]byte) byte {
+func IntraNodeRemove(url string, msg api.Message) api.Message {
+	keyMsg := msg.(*api.KeyDgram)
 	msg, err := api.SendRecv(url, func(addr *net.UDPAddr) api.Message {
-		return api.NewKeyDgram(api.NewMessageUID(addr), api.CmdIntraRemove, key)
+		return api.NewKeyDgram(msg.UID(), api.CmdIntraRemove, keyMsg.Key)
 	})
 	if err != nil {
-		return api.RespTimeout
-	} else if cmdErr := api.ResponseError(msg); cmdErr != nil {
-		return msg.Command()
+		return nil
 	} else {
-		return api.RespOk
+		return msg
 	}
 }
