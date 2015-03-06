@@ -1,10 +1,7 @@
 package handler
 
 import (
-	"net"
-
 	"encoding/json"
-	clientapi "github.com/tsiemens/kvstore/client/api"
 	"github.com/tsiemens/kvstore/server/config"
 	"github.com/tsiemens/kvstore/server/node"
 	"github.com/tsiemens/kvstore/server/protocol"
@@ -12,14 +9,18 @@ import (
 	"github.com/tsiemens/kvstore/shared/api"
 	"github.com/tsiemens/kvstore/shared/exec"
 	"github.com/tsiemens/kvstore/shared/log"
+	"net"
 )
 
 func HandleGet(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
 	keyMsg := msg.(*api.KeyDgram)
-	ownerId, owner := node.GetProcessNode().GetKeyOwner(keyMsg.Key)
+	ownerId, owner := node.GetProcessNode().GetPeerResponsibleForKey(keyMsg.Key)
 	var replyMsg api.Message
+	log.I.Printf("OwnerId is %s\n", ownerId.String())
+	log.I.Printf("My Id is %s\n", node.GetProcessNode().ID.String())
 
-	if ownerId == node.GetProcessNode().ID {
+	if *ownerId == node.GetProcessNode().ID {
+		log.D.Printf("Getting value with key %v\n", keyMsg.Key)
 		value, err := node.GetProcessNode().Store.Get(store.Key(keyMsg.Key))
 		if err != nil {
 			log.E.Println(err)
@@ -28,25 +29,31 @@ func HandleGet(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) 
 			replyMsg = api.NewValueDgram(msg.UID(), api.RespOk, value)
 		}
 	} else {
-		value, err := clientapi.Get(owner.Addr.String(), keyMsg.Key)
-		if err != nil {
-			log.E.Println(err)
-			//TODO handle different errors
+		value, respCode := protocol.IntraNodeGet(owner.Addr.String(), keyMsg.Key)
+		if respCode == api.RespOk {
+			replyMsg = api.NewValueDgram(msg.UID(), respCode, value)
 		} else {
-			replyMsg = api.NewValueDgram(msg.UID(), api.RespOk, value)
+			replyMsg = api.NewBaseDgram(msg.UID(), respCode)
+		}
+		if respCode == api.RespTimeout {
+			log.D.Println("Initiating gossip failure")
+			protocol.InitMembershipGossip(handler.Conn, *ownerId, owner)
 		}
 	}
+
 	protocol.ReplyToGet(handler.Conn, recvAddr, replyMsg)
 }
 
 func HandlePut(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
 	keyValMsg := msg.(*api.KeyValueDgram)
-	ownerId, owner := node.GetProcessNode().GetKeyOwner(keyValMsg.Key)
-	log.D.Printf("OwnerId is %v\n", ownerId.String())
-	log.D.Printf("my Id is %v\n", node.GetProcessNode().ID.String())
+	ownerId, owner := node.GetProcessNode().GetPeerResponsibleForKey(keyValMsg.Key)
+	log.I.Printf("OwnerId is %s\n", ownerId.String())
+	log.I.Printf("My Id is %s\n", node.GetProcessNode().ID.String())
+
 	var replyMsg api.Message
 
-	if ownerId == node.GetProcessNode().ID {
+	if *ownerId == node.GetProcessNode().ID {
+		log.D.Printf("Storing value '%s' with key %v\n", keyValMsg.Value, keyValMsg.Key)
 		err := node.GetProcessNode().Store.Put(
 			store.Key(keyValMsg.Key),
 			keyValMsg.Value)
@@ -57,26 +64,34 @@ func HandlePut(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) 
 			replyMsg = api.NewValueDgram(msg.UID(), api.RespOk, make([]byte, 0, 0))
 		}
 	} else {
-		err := clientapi.Put(owner.Addr.String(), keyValMsg.Key, keyValMsg.Value)
-		if err != nil {
-			log.E.Println(err)
-			//TODO handle different errors
-		} else {
-			replyMsg = api.NewValueDgram(msg.UID(), api.RespOk, make([]byte, 0, 0))
-		}
+		respCode := protocol.IntraNodePut(owner.Addr.String(), keyValMsg.Key, keyValMsg.Value)
+		replyMsg = api.NewValueDgram(msg.UID(), respCode, make([]byte, 0, 0))
 	}
 	protocol.ReplyToPut(handler.Conn, recvAddr, handler.Cache, replyMsg)
 }
 
 func HandleRemove(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
 	keyMsg := msg.(*api.KeyDgram)
-	err := node.GetProcessNode().Store.Remove(store.Key(keyMsg.Key))
-	success := true
-	if err != nil {
-		success = false
-		log.E.Println(err)
+	ownerId, owner := node.GetProcessNode().GetPeerResponsibleForKey(keyMsg.Key)
+	var replyMsg api.Message
+	log.I.Printf("OwnerId is %s\n", ownerId.String())
+	log.I.Printf("My Id is %s\n", node.GetProcessNode().ID.String())
+
+	if *ownerId == node.GetProcessNode().ID {
+		log.D.Printf("Deleting value with key %v\n", keyMsg.Key)
+		err := node.GetProcessNode().Store.Remove(store.Key(keyMsg.Key))
+		if err != nil {
+			log.E.Println(err)
+			replyMsg = api.NewBaseDgram(msg.UID(), api.RespInvalidKey)
+		} else {
+			replyMsg = api.NewValueDgram(msg.UID(), api.RespOk, make([]byte, 0, 0))
+		}
+	} else {
+		respCode := protocol.IntraNodeRemove(owner.Addr.String(), keyMsg.Key)
+		replyMsg = api.NewValueDgram(msg.UID(), respCode, make([]byte, 0, 0))
 	}
-	protocol.ReplyToRemove(handler.Conn, recvAddr, handler.Cache, msg, success)
+
+	protocol.ReplyToRemove(handler.Conn, recvAddr, handler.Cache, replyMsg)
 }
 
 func HandleStatusUpdate(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {

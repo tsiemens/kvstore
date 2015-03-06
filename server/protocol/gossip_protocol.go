@@ -30,9 +30,9 @@ func Gossip(conn *net.UDPConn, msg *api.KeyValueDgram) {
 	}
 }
 
-func InitMembershipGossip(conn *net.UDPConn, peerId *store.Key, peer *node.Peer) {
+func InitMembershipGossip(conn *net.UDPConn, peerId store.Key, peer *node.Peer) {
 	peerdata := map[store.Key]*node.Peer{
-		*peerId: peer,
+		peerId: peer,
 	}
 
 	payload, err := json.Marshal(NewPeerList(peerdata))

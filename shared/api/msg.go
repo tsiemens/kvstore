@@ -39,6 +39,7 @@ const RespStatusUpdateOK = 0x07
 const RespAdhocUpdateOK = 0x08
 const RespMalformedDatagram = 0x09
 const RespInvalidNode = 0x10
+const RespTimeout = 0x11
 
 type BaseDgram struct {
 	uid     [16]byte
