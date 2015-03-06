@@ -42,14 +42,14 @@ func NewDefaultCmdHandlerSet() map[byte]CmdHandler {
 	}
 }
 
-func (handler *MessageHandler) IsNewMessage(key [32]byte) bool {
+func (handler *MessageHandler) IsNewMessage(key [16]byte) bool {
 	if _, ok := handler.GossipKeyMap[string(key[:])]; ok {
 		return false
 	}
 	return true
 }
 
-func (handler *MessageHandler) ShouldGossip(key [32]byte) bool {
+func (handler *MessageHandler) ShouldGossip(key [16]byte) bool {
 	conf := config.GetConfig()
 	if shouldGossip, ok := handler.GossipKeyMap[string(key[:])]; ok {
 		if shouldGossip {

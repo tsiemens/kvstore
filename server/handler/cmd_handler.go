@@ -14,14 +14,15 @@ import (
 
 func HandleGet(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
 	keyMsg := msg.(*api.KeyDgram)
-	ownerId, owner := node.GetProcessNode().GetPeerResponsibleForKey(keyMsg.Key)
+	thisNode := node.GetProcessNode()
+	ownerId, owner := thisNode.GetPeerResponsibleForKey(keyMsg.Key)
 	var replyMsg api.Message
 	log.I.Printf("OwnerId is %s\n", ownerId.String())
-	log.I.Printf("My Id is %s\n", node.GetProcessNode().ID.String())
+	log.I.Printf("My Id is %s\n", thisNode.ID.String())
 
-	if *ownerId == node.GetProcessNode().ID {
+	if *ownerId == thisNode.ID {
 		log.D.Printf("Getting value with key %v\n", keyMsg.Key)
-		value, err := node.GetProcessNode().Store.Get(store.Key(keyMsg.Key))
+		value, err := thisNode.Store.Get(store.Key(keyMsg.Key))
 		if err != nil {
 			log.E.Println(err)
 			replyMsg = api.NewBaseDgram(msg.UID(), api.RespInvalidKey)
@@ -36,8 +37,15 @@ func HandleGet(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) 
 			replyMsg = api.NewBaseDgram(msg.UID(), respCode)
 		}
 		if respCode == api.RespTimeout {
-			log.D.Println("Initiating gossip failure")
-			protocol.InitMembershipGossip(handler.Conn, *ownerId, owner)
+			thisNode.SetPeerOffline(*ownerId)
+			newOwnerId, newOwner := thisNode.GetPeerResponsibleForKey(keyMsg.Key)
+			if *newOwnerId != thisNode.ID {
+				protocol.SendMembershipMsg(handler.Conn, newOwner.Addr, thisNode.ID,
+					map[store.Key]*node.Peer{*ownerId: owner}, api.CmdMembershipFailure)
+			} else {
+				protocol.InitMembershipGossip(handler.Conn, ownerId, owner)
+			}
+			// A5 TODO: here you would query the backup nodes
 		}
 	}
 
@@ -45,16 +53,17 @@ func HandleGet(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) 
 }
 
 func HandlePut(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
+	thisNode := node.GetProcessNode()
 	keyValMsg := msg.(*api.KeyValueDgram)
-	ownerId, owner := node.GetProcessNode().GetPeerResponsibleForKey(keyValMsg.Key)
+	ownerId, owner := thisNode.GetPeerResponsibleForKey(keyValMsg.Key)
 	log.I.Printf("OwnerId is %s\n", ownerId.String())
-	log.I.Printf("My Id is %s\n", node.GetProcessNode().ID.String())
+	log.I.Printf("My Id is %s\n", thisNode.ID.String())
 
 	var replyMsg api.Message
 
-	if *ownerId == node.GetProcessNode().ID {
+	if *ownerId == thisNode.ID {
 		log.D.Printf("Storing value '%s' with key %v\n", keyValMsg.Value, keyValMsg.Key)
-		err := node.GetProcessNode().Store.Put(
+		err := thisNode.Store.Put(
 			store.Key(keyValMsg.Key),
 			keyValMsg.Value)
 		if err != nil {
@@ -66,20 +75,32 @@ func HandlePut(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) 
 	} else {
 		respCode := protocol.IntraNodePut(owner.Addr.String(), keyValMsg.Key, keyValMsg.Value)
 		replyMsg = api.NewValueDgram(msg.UID(), respCode, make([]byte, 0, 0))
+		if respCode == api.RespTimeout {
+			thisNode.SetPeerOffline(*ownerId)
+			newOwnerId, newOwner := thisNode.GetPeerResponsibleForKey(keyValMsg.Key)
+			if *newOwnerId != thisNode.ID {
+				protocol.SendMembershipMsg(handler.Conn, newOwner.Addr, thisNode.ID,
+					map[store.Key]*node.Peer{*ownerId: owner}, api.CmdMembershipFailure)
+			}
+			protocol.InitMembershipGossip(handler.Conn, ownerId, owner)
+			HandlePut(handler, msg, recvAddr)
+			return
+		}
 	}
 	protocol.ReplyToPut(handler.Conn, recvAddr, handler.Cache, replyMsg)
 }
 
 func HandleRemove(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
+	thisNode := node.GetProcessNode()
 	keyMsg := msg.(*api.KeyDgram)
-	ownerId, owner := node.GetProcessNode().GetPeerResponsibleForKey(keyMsg.Key)
+	ownerId, owner := thisNode.GetPeerResponsibleForKey(keyMsg.Key)
 	var replyMsg api.Message
 	log.I.Printf("OwnerId is %s\n", ownerId.String())
-	log.I.Printf("My Id is %s\n", node.GetProcessNode().ID.String())
+	log.I.Printf("My Id is %s\n", thisNode.ID.String())
 
-	if *ownerId == node.GetProcessNode().ID {
+	if *ownerId == thisNode.ID {
 		log.D.Printf("Deleting value with key %v\n", keyMsg.Key)
-		err := node.GetProcessNode().Store.Remove(store.Key(keyMsg.Key))
+		err := thisNode.Store.Remove(store.Key(keyMsg.Key))
 		if err != nil {
 			log.E.Println(err)
 			replyMsg = api.NewBaseDgram(msg.UID(), api.RespInvalidKey)
@@ -89,6 +110,18 @@ func HandleRemove(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAdd
 	} else {
 		respCode := protocol.IntraNodeRemove(owner.Addr.String(), keyMsg.Key)
 		replyMsg = api.NewValueDgram(msg.UID(), respCode, make([]byte, 0, 0))
+		if respCode == api.RespTimeout {
+			thisNode.SetPeerOffline(*ownerId)
+			newOwnerId, newOwner := thisNode.GetPeerResponsibleForKey(keyMsg.Key)
+			if *newOwnerId != thisNode.ID {
+				protocol.SendMembershipMsg(handler.Conn, newOwner.Addr, thisNode.ID,
+					map[store.Key]*node.Peer{*ownerId: owner}, api.CmdMembershipFailure)
+			} else {
+				protocol.InitMembershipGossip(handler.Conn, ownerId, owner)
+			}
+			// A5 TODO: here you would query the backup nodes
+		}
+
 	}
 
 	protocol.ReplyToRemove(handler.Conn, recvAddr, handler.Cache, replyMsg)
@@ -98,7 +131,7 @@ func HandleStatusUpdate(handler *MessageHandler, msg api.Message, recvAddr *net.
 	conf := config.GetConfig()
 	log.D.Println("Status Update handle called")
 	keyValMsg := msg.(*api.KeyValueDgram)
-	if handler.IsNewMessage(keyValMsg.Key) {
+	if handler.IsNewMessage(keyValMsg.UID()) {
 		dataDelimiter := "\t\n\t\n"
 		// TODO handle failures properly
 		// Commented out all the identifiers because it was easier to create the html
@@ -114,7 +147,7 @@ func HandleStatusUpdate(handler *MessageHandler, msg api.Message, recvAddr *net.
 		protocol.ReplyToStatusUpdateServer(handler.Conn, conf.StatusServerAddr, handler.Cache, msg, []byte(deploymentSpace+dataDelimiter+diskSpace+dataDelimiter+uptime+dataDelimiter+currentload), success)
 	}
 
-	if handler.ShouldGossip(keyValMsg.Key) {
+	if handler.ShouldGossip(keyValMsg.UID()) {
 		protocol.Gossip(handler.Conn, keyValMsg)
 	}
 }
@@ -122,30 +155,30 @@ func HandleStatusUpdate(handler *MessageHandler, msg api.Message, recvAddr *net.
 func HandleAdhocUpdate(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
 	conf := config.GetConfig()
 	keyValMsg := msg.(*api.KeyValueDgram)
-	if handler.IsNewMessage(keyValMsg.Key) {
+	if handler.IsNewMessage(keyValMsg.UID()) {
 		success, status := exec.RunCommand(string(keyValMsg.Value))
 		protocol.ReplyToStatusUpdateServer(handler.Conn, conf.StatusServerAddr, handler.Cache, msg, []byte(status), success)
 	}
 
-	if handler.ShouldGossip(keyValMsg.Key) {
+	if handler.ShouldGossip(keyValMsg.UID()) {
 		protocol.Gossip(handler.Conn, keyValMsg)
 	}
 }
 
 func HandleMembershipMsgExchange(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
-	handleMembership(&msg, recvAddr)
+	handleMembership(msg, recvAddr)
 	thisNode := node.GetProcessNode()
 	protocol.SendMembershipMsg(handler.Conn, recvAddr,
 		thisNode.ID, thisNode.KnownPeers, api.CmdMembership)
 }
 
 func HandleMembershipMsg(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
-	handleMembership(&msg, recvAddr)
+	handleMembership(msg, recvAddr)
 }
 
 func HandleMembershipFailureGossip(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
-	handleMembership(&msg, recvAddr)
-	if handler.ShouldGossip(msg.(*api.KeyValueDgram).Key) {
+	handleMembership(msg, recvAddr)
+	if handler.ShouldGossip(msg.(*api.KeyValueDgram).UID()) {
 		protocol.Gossip(handler.Conn, msg.(*api.KeyValueDgram))
 	}
 }
@@ -158,8 +191,8 @@ func HandleMembershipQuery(handler *MessageHandler, msg api.Message, recvAddr *n
 	}
 }
 
-func handleMembership(msg *api.Message, recvAddr *net.UDPAddr) {
-	if keyValMsg, ok := (*msg).(*api.KeyValueDgram); ok {
+func handleMembership(msg api.Message, recvAddr *net.UDPAddr) {
+	if keyValMsg, ok := msg.(*api.KeyValueDgram); ok {
 		nodeId := keyValMsg.Key
 		peers := &protocol.PeerList{}
 		err := json.Unmarshal(keyValMsg.Value, peers)

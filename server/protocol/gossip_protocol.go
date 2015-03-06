@@ -20,21 +20,18 @@ func Gossip(conn *net.UDPConn, msg *api.KeyValueDgram) {
 			return
 		}
 		addr := peer.Addr
-		requestMsg := api.NewKeyValueDgram(api.NewMessageUID(addr),
-			msg.Command(), msg.Key, msg.Value)
 		log.D.Println("Gossiping to", addr)
-		_, err := conn.WriteTo(requestMsg.Bytes(), addr)
+		_, err := conn.WriteTo(msg.Bytes(), addr)
 		if err != nil {
 			log.E.Println(err)
 		}
 	}
 }
 
-func InitMembershipGossip(conn *net.UDPConn, peerId store.Key, peer *node.Peer) {
+func InitMembershipGossip(conn *net.UDPConn, peerId *store.Key, failedPeer *node.Peer) {
 	peerdata := map[store.Key]*node.Peer{
-		peerId: peer,
+		*peerId: failedPeer,
 	}
-
 	payload, err := json.Marshal(NewPeerList(peerdata))
 	if err != nil {
 		log.E.Println(err)
@@ -49,9 +46,8 @@ func InitMembershipGossip(conn *net.UDPConn, peerId store.Key, peer *node.Peer) 
 			return
 		}
 		addr := peer.Addr
-		key, err := api.NewRandKey()
 		requestMsg := api.NewKeyValueDgram(api.NewMessageUID(addr),
-			api.CmdMembershipFailureGossip, key, payload)
+			api.CmdMembershipFailureGossip, thisNode.ID, payload)
 		log.D.Println("Gossiping to", addr)
 		_, err = conn.WriteTo(requestMsg.Bytes(), addr)
 		if err != nil {

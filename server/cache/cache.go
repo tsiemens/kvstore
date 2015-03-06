@@ -44,7 +44,7 @@ func (cache *Cache) StoreAndGetReply(msg api.Message) (bool, api.Message) {
  * cache may be nil
  */
 func (cache *Cache) SendReply(conn *net.UDPConn, msg api.Message, addr net.Addr) (int, error) {
-	if cache != nil {
+	if cache != nil && msg.Command() == api.RespOk {
 		if entry, ok := cache.M[msg.UID()]; ok {
 			entry.Reply = msg
 		}

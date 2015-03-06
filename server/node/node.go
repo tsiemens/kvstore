@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-const timeErr = time.Millisecond * 5
+const timeErr = time.Millisecond * 50
 const TimeTillMemberDrop = time.Minute * 5
 
 // Node represents this machine, as one in a cluster of nodes.
@@ -154,8 +154,12 @@ func (node *Node) UpdatePeers(peers map[store.Key]*Peer, sendingPeerId store.Key
 		if key != node.ID {
 			log.I.Println("updating " + key.String())
 			if _, ok := node.KnownPeers[key]; ok {
-				if time.Now().Add(timeErr).Before(remotePeerVal.LastSeen) {
-					node.KnownPeers[key] = remotePeerVal
+				if time.Now().Add(timeErr).After(remotePeerVal.LastSeen) {
+					peerVal := node.KnownPeers[key]
+					peerVal.Online = remotePeerVal.Online
+					if peerVal.LastSeen.Before(remotePeerVal.LastSeen) {
+						peerVal.LastSeen = remotePeerVal.LastSeen
+					}
 				}
 			} else {
 				node.KnownPeers[key] = remotePeerVal
@@ -165,16 +169,22 @@ func (node *Node) UpdatePeers(peers map[store.Key]*Peer, sendingPeerId store.Key
 		}
 	}
 
+	// Using loopback, it's possible for a node to send a
+	// gossip membership message to itself
+	if sendingPeerId == node.ID {
+		return
+	}
+
 	var sendingPeer *Peer
 	if peer, ok := node.KnownPeers[sendingPeerId]; ok {
 		sendingPeer = peer
 	} else {
 		sendingPeer = &Peer{}
 		node.KnownPeers[sendingPeerId] = sendingPeer
+		sendingPeer.Addr = sendingAddr
 	}
 	sendingPeer.LastSeen = time.Now()
 	sendingPeer.Online = true
-	sendingPeer.Addr = sendingAddr
 
 	node.CleanupKnownNodes()
 	node.UpdateSortedKeys()
@@ -195,8 +205,14 @@ func (n *Node) GetPeerResponsibleForKey(key store.Key) (*store.Key, *Peer) {
 	responsibleKey := n.NodeKeyList[0]
 	for _, nodekey := range n.NodeKeyList {
 		if nodekey.GreaterEquals(key) {
-			responsibleKey = nodekey
-			break
+			if nodekey == n.ID {
+				responsibleKey = nodekey
+				break
+			}
+			if node, ok := n.KnownPeers[nodekey]; ok && node.Online {
+				responsibleKey = nodekey
+				break
+			}
 		}
 	}
 	if responsibleKey == n.ID {
