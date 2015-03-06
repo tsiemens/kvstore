@@ -28,4 +28,5 @@ var RespMessageParsers = map[byte]MessagePayloadParser{
 	RespStatusUpdateOK:   ParseKeyValueDgram,
 	RespAdhocUpdateOK:    ParseKeyValueDgram,
 	RespInvalidNode:      ParseKeyValueDgram,
+	RespTimeout:          ParseBaseDgram,
 }

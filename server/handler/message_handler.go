@@ -25,13 +25,13 @@ type MessageHandler struct {
 
 func NewDefaultCmdHandlerSet() map[byte]CmdHandler {
 	return map[byte]CmdHandler{
-		api.CmdPut:      HandlePut,
-		api.CmdGet:      HandleGet,
-		api.CmdRemove:   HandleRemove,
-		api.CmdShutdown: HandleShutdown,
-		//api.CmdIntraPut:           HandleIntraPut,
-		//api.CmdIntraGet:           HandleIntraGet,
-		//api.CmdIntraRemove:        HandleIntraRemove,
+		api.CmdPut:                     HandlePut,
+		api.CmdGet:                     HandleGet,
+		api.CmdRemove:                  HandleRemove,
+		api.CmdShutdown:                HandleShutdown,
+		api.CmdIntraPut:                HandlePut,
+		api.CmdIntraGet:                HandleGet,
+		api.CmdIntraRemove:             HandleRemove,
 		api.CmdStatusUpdate:            HandleStatusUpdate,
 		api.CmdAdhocUpdate:             HandleAdhocUpdate,
 		api.CmdMembership:              HandleMembershipMsg,

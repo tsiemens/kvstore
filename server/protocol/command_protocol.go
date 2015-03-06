@@ -7,7 +7,7 @@ import (
 
 func IntraNodeGet(url string, key [32]byte) ([]byte, byte) {
 	msg, err := api.SendRecv(url, func(addr *net.UDPAddr) api.Message {
-		return api.NewKeyDgram(api.NewMessageUID(addr), api.CmdGet, key)
+		return api.NewKeyDgram(api.NewMessageUID(addr), api.CmdIntraGet, key)
 	})
 	if err != nil {
 		return nil, api.RespTimeout
@@ -22,7 +22,7 @@ func IntraNodeGet(url string, key [32]byte) ([]byte, byte) {
 
 func IntraNodePut(url string, key [32]byte, value []byte) byte {
 	msg, err := api.SendRecv(url, func(addr *net.UDPAddr) api.Message {
-		return api.NewKeyValueDgram(api.NewMessageUID(addr), api.CmdPut, key, value)
+		return api.NewKeyValueDgram(api.NewMessageUID(addr), api.CmdIntraPut, key, value)
 	})
 	if err != nil {
 		return api.RespTimeout
@@ -35,7 +35,7 @@ func IntraNodePut(url string, key [32]byte, value []byte) byte {
 
 func IntraNodeRemove(url string, key [32]byte) byte {
 	msg, err := api.SendRecv(url, func(addr *net.UDPAddr) api.Message {
-		return api.NewKeyDgram(api.NewMessageUID(addr), api.CmdRemove, key)
+		return api.NewKeyDgram(api.NewMessageUID(addr), api.CmdIntraRemove, key)
 	})
 	if err != nil {
 		return api.RespTimeout
