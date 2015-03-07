@@ -1,68 +1,66 @@
 package store
 
-import "errors"
-import "github.com/tsiemens/kvstore/shared/log"
+import (
+	"errors"
+	"github.com/tsiemens/kvstore/shared/util"
+	"sort"
+)
 
 // representation of the consistent hashing store
 type Store struct {
-	m       map[Key][]byte
-	baseKey Key
-	maxKey  Key
+	m    map[Key][]byte
+	Lock util.Semaphore
 }
 
 func New() *Store {
 	return &Store{
-		m: make(map[Key][]byte),
-		// Temporary for A3
-		baseKey: Key([32]byte{}),
-		maxKey:  makeMaxKey(),
+		m:    make(map[Key][]byte),
+		Lock: util.NewSemaphore(),
 	}
 }
 
 func (s *Store) Get(key Key) ([]byte, error) {
 	var val []byte
-	if s.IsMyKey(key) {
-		v, ok := s.m[key]
-		val = v
-		if !ok {
-			return nil, errors.New("No value for " + key.String())
-		}
-	} else {
-		log.D.Println("TODO Was told to get not my key")
+	s.Lock.Lock()
+	defer s.Lock.Unlock()
+	v, ok := s.m[key]
+	val = v
+	if !ok {
+		return nil, errors.New("No value for " + key.String())
 	}
 	return val, nil
 }
 
 func (s *Store) Put(key Key, value []byte) error {
-	if s.IsMyKey(key) {
-		s.m[key] = value
-	} else {
-		log.D.Println("TODO Was told to put not my key")
-	}
+	s.Lock.Lock()
+	defer s.Lock.Unlock()
+	s.m[key] = value
 	return nil
 }
 
 func (s *Store) Remove(key Key) error {
-	if s.IsMyKey(key) {
-		if _, ok := s.m[key]; ok {
-			delete(s.m, key)
-		} else {
-			return errors.New("No value for " + key.String())
-		}
+	s.Lock.Lock()
+	defer s.Lock.Unlock()
+	if _, ok := s.m[key]; ok {
+		delete(s.m, key)
+		return nil
 	} else {
-		log.D.Println("TODO Was told to remove not my key")
+		return errors.New("No value for " + key.String())
 	}
-	return nil
 }
 
-func (s *Store) IsMyKey(key Key) bool {
-	return key.GreaterEquals(s.baseKey) && key.LessEquals(s.maxKey)
+func (s *Store) GetKeys() []Key {
+	s.Lock.Lock()
+	defer s.Lock.Unlock()
+	keys := make([]Key, 0, len(s.m))
+	for k := range s.m {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
-func makeMaxKey() Key {
-	key := [32]byte{}
-	for i, _ := range key {
-		key[i] = 0xFF
-	}
-	return Key(key)
+func (s *Store) GetSortedKeys() []Key {
+	keys := s.GetKeys()
+	sort.Sort(Keys(keys))
+	return keys
 }

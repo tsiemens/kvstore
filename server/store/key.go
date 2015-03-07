@@ -51,6 +51,18 @@ func (k *Key) LessEquals(other Key) bool {
 	return k.lesser(other, true)
 }
 
+func (k *Key) Between(lower Key, higher Key) bool {
+	if lower.Equals(higher) {
+		return true
+	} else if lower.GreaterThan(higher) {
+		// Looped the circle
+		return (lower.LessThan(*k) && higher.LessEquals(*k)) ||
+			(lower.GreaterThan(*k) && higher.GreaterEquals(*k))
+	} else {
+		return (lower.LessThan(*k) && higher.GreaterEquals(*k))
+	}
+}
+
 func (k *Key) String() string {
 	return fmt.Sprintf("%x", k[:])
 }

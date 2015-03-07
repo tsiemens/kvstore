@@ -15,6 +15,7 @@ var CmdMessageParsers = map[byte]MessagePayloadParser{
 	CmdMembershipQuery:         ParseBaseDgram,
 	CmdMembershipFailure:       ParseKeyValueDgram,
 	CmdMembershipFailureGossip: ParseKeyValueDgram,
+	CmdStorePush:               ParseValueDgram,
 }
 
 var RespMessageParsers = map[byte]MessagePayloadParser{

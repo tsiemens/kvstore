@@ -81,3 +81,33 @@ func TestKeyEquals(t *testing.T) {
 		t.Fatal("LessEquals failed")
 	}
 }
+
+func TestBetween(t *testing.T) {
+	k1 := makeTestKey([]byte{0x50, 0x50})
+	k2 := makeTestKey([]byte{0x52, 0x51})
+	k3 := makeTestKey([]byte{0x53, 0x51})
+
+	if k1.Between(k2, k3) {
+		t.Fatal("Not between failed")
+	}
+
+	if !k2.Between(k1, k1) {
+		t.Fatal("Between one key failed")
+	}
+
+	if !k2.Between(k1, k3) {
+		t.Fatal("Normal between failed")
+	}
+
+	if k2.Between(k3, k1) {
+		t.Fatal("Looping not between failed")
+	}
+
+	if !k1.Between(k3, k2) {
+		t.Fatal("Looping between 1 failed")
+	}
+
+	if !k3.Between(k2, k1) {
+		t.Fatal("Looping between 2 failed")
+	}
+}

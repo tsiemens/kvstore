@@ -20,12 +20,13 @@ const TimeTillMemberDrop = time.Minute * 1
 
 // Node represents this machine, as one in a cluster of nodes.
 type Node struct {
-	ID          store.Key // Not needed just yet, but it will later
-	KnownPeers  map[store.Key]*Peer
-	NodeKeyList []store.Key
-	Lock        util.Semaphore
-	Conn        *net.UDPConn
-	Store       *store.Store
+	ID                  store.Key // Not needed just yet, but it will later
+	KnownPeers          map[store.Key]*Peer
+	NodeKeyList         []store.Key
+	Lock                util.Semaphore
+	Conn                *net.UDPConn
+	Store               *store.Store
+	sendKeyValuesToNode KeyValueMigrator
 }
 
 type Peer struct {
@@ -36,14 +37,16 @@ type Peer struct {
 
 var node *Node
 
-func Init(localAddr *net.UDPAddr, conn *net.UDPConn, procStore *store.Store) {
+func Init(localAddr *net.UDPAddr, conn *net.UDPConn, procStore *store.Store,
+	sendKVs KeyValueMigrator) {
 	node = &Node{
-		ID:          createNodeID(localAddr),
-		KnownPeers:  map[store.Key]*Peer{},
-		NodeKeyList: []store.Key{},
-		Lock:        util.NewSemaphore(),
-		Conn:        conn,
-		Store:       procStore,
+		ID:                  createNodeID(localAddr),
+		KnownPeers:          map[store.Key]*Peer{},
+		NodeKeyList:         []store.Key{},
+		Lock:                util.NewSemaphore(),
+		Conn:                conn,
+		Store:               procStore,
+		sendKeyValuesToNode: sendKVs,
 	}
 	node.UpdateSortedKeys()
 	log.I.Println("Node initialized with ID: " + node.ID.String())
@@ -149,13 +152,18 @@ func (node *Node) UpdateSortedKeys() {
 func (node *Node) UpdatePeers(peers map[store.Key]*Peer, sendingPeerId store.Key, sendingAddr *net.UDPAddr) {
 	node.Lock.Lock()
 	defer node.Lock.Unlock()
-	log.I.Println("Updating peers...")
+	newOnlineNodes := make([]store.Key, 1)
+	oldLowerBoundKey := node.GetNextLowestPeerKey()
+	log.D.Println("Updating peers...")
 	for key, remotePeerVal := range peers {
 		if key != node.ID {
-			log.I.Println("updating " + key.String())
+			log.D.Println("updating " + key.String())
 			if _, ok := node.KnownPeers[key]; ok {
 				if time.Now().Add(timeErr).After(remotePeerVal.LastSeen) {
 					peerVal := node.KnownPeers[key]
+					if !peerVal.Online && remotePeerVal.Online {
+						newOnlineNodes = append(newOnlineNodes, key)
+					}
 					peerVal.Online = remotePeerVal.Online
 					if peerVal.LastSeen.Before(remotePeerVal.LastSeen) {
 						peerVal.LastSeen = remotePeerVal.LastSeen
@@ -163,9 +171,12 @@ func (node *Node) UpdatePeers(peers map[store.Key]*Peer, sendingPeerId store.Key
 				}
 			} else {
 				node.KnownPeers[key] = remotePeerVal
+				if remotePeerVal.Online {
+					newOnlineNodes = append(newOnlineNodes, key)
+				}
 			}
 		} else {
-			log.I.Println("ingnoring my id")
+			log.D.Println("ingnoring my id")
 		}
 	}
 
@@ -182,14 +193,72 @@ func (node *Node) UpdatePeers(peers map[store.Key]*Peer, sendingPeerId store.Key
 		sendingPeer = &Peer{}
 		node.KnownPeers[sendingPeerId] = sendingPeer
 		sendingPeer.Addr = sendingAddr
+		newOnlineNodes = append(newOnlineNodes, sendingPeerId)
 	}
 	sendingPeer.LastSeen = time.Now()
 	sendingPeer.Online = true
 
 	node.CleanupKnownNodes()
 	node.UpdateSortedKeys()
-	log.I.Println("Done.")
+	node.handleNewPeersOnline(newOnlineNodes, oldLowerBoundKey)
+	log.D.Println("Done.")
 }
+
+// Handles the case when a peer was previously not known, or is now online
+// If a value transfer is required, spawns new goroutines to copy it.
+func (n *Node) handleNewPeersOnline(peerIds []store.Key,
+	oldLowerBound store.Key) {
+
+	storeKeys := n.Store.GetSortedKeys()
+	for _, newPeerKey := range peerIds {
+		if (&newPeerKey).Between(oldLowerBound, n.ID) {
+			nodesKeys := n.GetAllKeysForNode(newPeerKey, storeKeys)
+			// send all keys in this range
+			values := make(map[store.Key][]byte, len(nodesKeys))
+			for _, key := range nodesKeys {
+				val, err := n.Store.Get(key)
+				if err == nil {
+					values[key] = val
+				}
+			}
+			go n.sendKeyValuesToNode(newPeerKey, values)
+		}
+	}
+}
+
+func (n *Node) GetAllKeysForNode(peerKey store.Key,
+	sortedStoreKeys []store.Key) []store.Key {
+
+	nextLowest := n.GetNextLowestPeerKeyFrom(peerKey)
+	// probabalistic size for efficiency
+	keys := make([]store.Key, int(float32(len(sortedStoreKeys))*0.6))
+	for _, storeKey := range sortedStoreKeys {
+		if storeKey.Between(nextLowest, peerKey) {
+			keys = append(keys, storeKey)
+		}
+	}
+	return keys
+}
+
+func (n *Node) GetNextLowestPeerKey() store.Key {
+	return n.GetNextLowestPeerKeyFrom(n.ID)
+}
+
+func (n *Node) GetNextLowestPeerKeyFrom(key store.Key) store.Key {
+	for i, nodekey := range n.NodeKeyList {
+		if nodekey == key {
+			if i == 0 {
+				return n.NodeKeyList[len(n.NodeKeyList)-1]
+			} else {
+				return n.NodeKeyList[i]
+			}
+		}
+	}
+	return key
+}
+
+// This is really irritating that we need this because of IMPORT CYCLES
+type KeyValueMigrator func(peerKey store.Key, values map[store.Key][]byte)
 
 func (n *Node) SetPeerOffline(peerId store.Key) {
 	if peer, ok := node.KnownPeers[peerId]; ok {
