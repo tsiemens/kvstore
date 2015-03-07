@@ -3,6 +3,7 @@ package protocol
 import (
 	"encoding/json"
 	"github.com/tsiemens/kvstore/server/cache"
+	"github.com/tsiemens/kvstore/server/node"
 	"github.com/tsiemens/kvstore/server/store"
 	"github.com/tsiemens/kvstore/shared/api"
 	"github.com/tsiemens/kvstore/shared/log"
@@ -10,14 +11,36 @@ import (
 )
 
 type kvMap struct {
-	M map[store.Key][]byte
+	M map[string][]byte
+}
+
+func NewKVMap(kvs map[store.Key][]byte) *kvMap {
+	keyStringMap := map[string][]byte{}
+	for key, value := range kvs {
+		keyStringMap[api.KeyHex(key)] = value
+	}
+	return &kvMap{keyStringMap}
+}
+
+func (kvmap *kvMap) KeyValues() map[store.Key][]byte {
+	keyValMap := map[store.Key][]byte{}
+	for keyString, value := range kvmap.M {
+		key, err := api.KeyFromHex(keyString)
+		if err == nil {
+			keyValMap[store.Key(key)] = value
+		} else {
+			log.E.Println(err)
+		}
+	}
+	return keyValMap
 }
 
 // Sends a sendRecv message with a range of key values to a node
 // Returns error if the node times out
 func SendStorePushMsg(conn *net.UDPConn, addr *net.UDPAddr, values map[store.Key][]byte) error {
 
-	kvdata, err := json.Marshal(&kvMap{values})
+	valuesWrapper := NewKVMap(values)
+	kvdata, err := json.Marshal(valuesWrapper)
 	if err != nil {
 		log.E.Panicln("Could not marshal key values")
 	}
@@ -36,7 +59,21 @@ func ParseStorePushMsgValue(data []byte) (map[store.Key][]byte, error) {
 	if err != nil {
 		return nil, err
 	} else {
-		return values.M, nil
+		return values.KeyValues(), nil
+	}
+}
+
+// Hack to avoid import cycles
+func SendKeyValuesToNode(peerKey store.Key, values map[store.Key][]byte) {
+	n := node.GetProcessNode()
+	if peer, ok := n.KnownPeers[peerKey]; ok {
+		err := SendStorePushMsg(n.Conn, peer.Addr, values)
+		if err != nil {
+			peer.Online = false
+			log.D.Printf("Failed to copy keys to %s\n", peerKey.String())
+		} else {
+			log.I.Printf("Copied portion of keys to %s\n", peerKey.String())
+		}
 	}
 }
 

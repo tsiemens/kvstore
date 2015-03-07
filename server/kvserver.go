@@ -50,7 +50,7 @@ func main() {
 
 	} else {
 		store := store.New()
-		node.Init(localAddr, conn, store)
+		node.Init(localAddr, conn, store, protocol.SendKeyValuesToNode)
 		loop.GoAll()
 		msgHandler := handler.NewDefaultMessageHandler(conn, cl.PacketLossPct)
 		err = protocol.LoopReceiver(conn, msgHandler)

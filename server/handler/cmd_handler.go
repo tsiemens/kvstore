@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"github.com/tsiemens/kvstore/server/config"
 	"github.com/tsiemens/kvstore/server/node"
@@ -12,12 +13,28 @@ import (
 	"net"
 )
 
+func convertClientKey(clientKey [32]byte) [32]byte {
+	return sha256.Sum256(clientKey[:])
+}
+
+func keyString(key [32]byte) string {
+	k := store.Key(key)
+	return (&k).String()
+}
+
+func printKeyHandleMsg(key [32]byte, owner *store.Key, thisNode *node.Node) {
+	log.I.Printf("Handling Key %s\n\tOwnerId is %s\n\tMy Id is %s\n",
+		keyString(key), owner.String(), thisNode.ID.String())
+}
+
 func HandleGet(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
 	keyMsg := msg.(*api.KeyDgram)
+	if keyMsg.Command() == api.CmdGet {
+		keyMsg.Key = convertClientKey(keyMsg.Key)
+	}
 	thisNode := node.GetProcessNode()
 	ownerId, owner := thisNode.GetPeerResponsibleForKey(keyMsg.Key)
-	log.I.Printf("OwnerId is %s\n", ownerId.String())
-	log.I.Printf("My Id is %s\n", thisNode.ID.String())
+	printKeyHandleMsg(keyMsg.Key, ownerId, thisNode)
 
 	// If this node is responsible for key, return value
 	if *ownerId == thisNode.ID {
@@ -72,9 +89,11 @@ func HandleGet(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) 
 func HandlePut(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
 	thisNode := node.GetProcessNode()
 	keyValMsg := msg.(*api.KeyValueDgram)
+	if keyValMsg.Command() == api.CmdPut {
+		keyValMsg.Key = convertClientKey(keyValMsg.Key)
+	}
 	ownerId, owner := thisNode.GetPeerResponsibleForKey(keyValMsg.Key)
-	log.I.Printf("OwnerId is %s\n", ownerId.String())
-	log.I.Printf("My Id is %s\n", thisNode.ID.String())
+	printKeyHandleMsg(keyValMsg.Key, ownerId, thisNode)
 
 	// If this node is responsible for key, return value
 	if *ownerId == thisNode.ID {
@@ -130,9 +149,11 @@ func HandlePut(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) 
 func HandleRemove(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
 	thisNode := node.GetProcessNode()
 	keyMsg := msg.(*api.KeyDgram)
+	if keyMsg.Command() == api.CmdRemove {
+		keyMsg.Key = convertClientKey(keyMsg.Key)
+	}
 	ownerId, owner := thisNode.GetPeerResponsibleForKey(keyMsg.Key)
-	log.I.Printf("OwnerId is %s\n", ownerId.String())
-	log.I.Printf("My Id is %s\n", thisNode.ID.String())
+	printKeyHandleMsg(keyMsg.Key, ownerId, thisNode)
 
 	// If this node is responsible for key, return value
 	if *ownerId == thisNode.ID {
