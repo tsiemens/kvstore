@@ -92,18 +92,46 @@ func Shutdown(url string, command byte) (time.Duration, int) {
 	default:
 		log.I.Println("Unknown cluster, aborting shutdown test")
 		return s.GetMilliseconds(), failures
+
+	//Cluster 1
 	case "kc-sce-plab2.umkc.edu",
 		"planetlab1.cs.uml.edu",
 		"plonk.cs.uwaterloo.ca":
 		addressList[0] = "kc-sce-plab2.umkc.edu:5555"
 		addressList[1] = "planetlab1.cs.uml.edu:5555"
 		addressList[2] = "plonk.cs.uwaterloo.ca:5555"
+
+	//Cluster 2
 	case "planetlab2.cs.purdue.edu",
 		"planetlab1.koganei.itrc.net",
 		"planetlab1.aut.ac.nz":
 		addressList[0] = "planetlab2.cs.purdue.edu:5555"
 		addressList[1] = "planetlab1.koganei.itrc.net:5555"
 		addressList[2] = "planetlab1.aut.ac.nz:5555"
+
+	//Cluster 3
+	case "planetlab1.unr.edu",
+		"planetlab1.dojima.wide.ad.jp",
+		"planetlab1.acis.ufl.edu":
+		addressList[0] = "planetlab1.unr.edu:5555"
+		addressList[1] = "planetlab1.dojima.wide.ad.jp:5555"
+		addressList[2] = "planetlab1.acis.ufl.edu:5555"
+
+	//Cluster 4
+	case "planetlab1.cs.uiuc.edu",
+		"planetlab-n2.wand.net.nz",
+		"node2.planetlab.mathcs.emory.edu":
+		addressList[0] = "planetlab1.cs.uiuc.edu:5555"
+		addressList[1] = "planetlab-n2.wand.net.nz:5555"
+		addressList[2] = "node2.planetlab.mathcs.emory.edu:5555"
+
+	//Cluster 5
+	case "planetlab2.csuohio.edu",
+		"pl4.cs.unm.edu",
+		"planetlab1.eecs.umich.edu":
+		addressList[0] = "planetlab2.csuohio.edu:5555"
+		addressList[1] = "pl4.cs.unm.edu:5555"
+		addressList[2] = "planetlab1.eecs.umich.edu:5555"
 
 	}
 
