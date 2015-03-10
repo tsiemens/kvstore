@@ -14,14 +14,15 @@ func ResponseTime(url string, keyvals []KeyValue, command byte) (time.Duration, 
 	failures := 0
 	s := StopWatch{}
 	var err error
+	var msg api.Message
 	for _, keyval := range keyvals {
 		s.Start()
 		if command == api.CmdGet || command == api.CmdRemove {
-			_, err = api.SendRecv(url, func(addr *net.UDPAddr) api.Message {
+			msg, err = api.SendRecv(url, func(addr *net.UDPAddr) api.Message {
 				return api.NewKeyDgram(api.NewMessageUID(addr), command, keyval.Key)
 			})
 		} else {
-			_, err = api.SendRecv(url, func(addr *net.UDPAddr) api.Message {
+			msg, err = api.SendRecv(url, func(addr *net.UDPAddr) api.Message {
 				return api.NewKeyValueDgram(api.NewMessageUID(addr), command, keyval.Key, keyval.Value)
 			})
 
@@ -32,6 +33,9 @@ func ResponseTime(url string, keyvals []KeyValue, command byte) (time.Duration, 
 		if err != nil {
 			failures++
 			log.I.Println(err)
+		} else if api.ResponseError(msg) != nil {
+			failures++
+			log.I.Println(api.ResponseError(msg))
 		}
 
 	}
