@@ -133,6 +133,14 @@ func Shutdown(url string, command byte) (time.Duration, int) {
 		addressList[1] = "pl4.cs.unm.edu:5555"
 		addressList[2] = "planetlab1.eecs.umich.edu:5555"
 
+	//Cluster 6
+	case "planetlab1.cs.colorado.edu",
+		"ricepl-5.cs.rice.edu",
+		"planetlab6.goto.info.waseda.ac.jp":
+		addressList[0] = "planetlab1.cs.colorado.edu:5555"
+		addressList[1] = "ricepl-5.cs.rice.edu:5555"
+		addressList[2] = "planetlab6.goto.info.waseda.ac.jp:5555"
+
 	}
 
 	var key [32]byte
