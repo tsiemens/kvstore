@@ -34,7 +34,7 @@ func (s *StopWatch) GetMilliseconds() time.Duration {
 	return s.StopTime.Sub(s.StartTime)
 }
 
-func RunTestSuite(url string, SendCount int) {
+func RunTestSuite(url string, SendCount int, shutdown bool) {
 	log.I.Println("Running test suite")
 	keyvals := make([]KeyValue, SendCount)
 	for i := 0; i < SendCount; i++ {
@@ -67,5 +67,11 @@ func RunTestSuite(url string, SendCount int) {
 	log.I.Println("Running", SendCount, "asynchronous REMOVE commands")
 	duration, failures = ThroughPut(url, keyvals, api.CmdRemove)
 	log.I.Println("Finished. Duration:", duration, "Failures:", failures)
+
+	if shutdown == true {
+		log.I.Println("Running synchronous Shutdown command")
+		duration, failures = Shutdown(url, api.CmdShutdown)
+		log.I.Println("Finished. Duration:", duration, "Failures:", failures)
+	}
 
 }

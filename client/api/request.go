@@ -59,23 +59,18 @@ func Remove(url string, key [32]byte) error {
  * using the kvstore protocol */
 func Test(url string, args []string) error {
 	sendCount := 100
+	shutdown := false
 	if len(args) > 0 {
 		sendCount, _ = strconv.Atoi(args[0])
 	}
+	if len(args) > 1 {
+		switch args[1] {
+		case "shutdown":
+			shutdown = true
+		}
+	}
 
-	test.RunTestSuite(url, sendCount)
-	//msg, err := api.SendRecv(url, func(addr *net.UDPAddr) api.Message {
-	//	return api.NewKeyDgram(api.NewMessageUID(addr), api.CmdRemove, key)
-	//})
-	//if err != nil {
-	//	return err
-	//} else if cmdErr := api.ResponseError(msg); cmdErr != nil {
-	//	return cmdErr
-	//} else {
-	//	return nil
-	//}
-
-	//run tests here
+	test.RunTestSuite(url, sendCount, shutdown)
 
 	return nil
 }
