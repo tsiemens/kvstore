@@ -22,6 +22,22 @@ func ResponseTime(url string, keyvals []KeyValue, command byte) (time.Duration, 
 			msg, err = api.SendRecv(url, func(addr *net.UDPAddr) api.Message {
 				return api.NewKeyDgram(api.NewMessageUID(addr), command, keyval.Key)
 			})
+			if command == api.CmdGet {
+				returnVal := msg.(*api.ValueDgram).Value
+				if len(returnVal) != len(keyval.Value) {
+					log.I.Println("Value", returnVal, " != ", keyval.Value)
+					failures++
+
+				} else {
+					for i := range returnVal {
+						if returnVal[i] != keyval.Value[i] {
+							log.I.Println("Value", returnVal, " != ", keyval.Value)
+							failures++
+							break
+						}
+					}
+				}
+			}
 		} else {
 			msg, err = api.SendRecv(url, func(addr *net.UDPAddr) api.Message {
 				return api.NewKeyValueDgram(api.NewMessageUID(addr), command, keyval.Key, keyval.Value)
