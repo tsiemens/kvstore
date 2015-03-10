@@ -52,3 +52,22 @@ func Remove(url string, key [32]byte) error {
 		return nil
 	}
 }
+
+/* Runs a set of tests on the server at url,
+ * using the kvstore protocol */
+func Test(url string, args []string) error {
+	//msg, err := api.SendRecv(url, func(addr *net.UDPAddr) api.Message {
+	//	return api.NewKeyDgram(api.NewMessageUID(addr), api.CmdRemove, key)
+	//})
+	//if err != nil {
+	//	return err
+	//} else if cmdErr := api.ResponseError(msg); cmdErr != nil {
+	//	return cmdErr
+	//} else {
+	//	return nil
+	//}
+
+	//run tests here
+
+	return nil
+}

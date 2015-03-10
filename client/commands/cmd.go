@@ -25,6 +25,8 @@ func New(cmdstr string) (cmd Command, err error) {
 		cmd = newStatusUpdateCommand()
 	case "adhoc":
 		cmd = newAdhocUpdateCommand()
+	case "test":
+		cmd = newTestCommand()
 	default:
 		err = errors.New("Unknown command \"" + cmdstr + "\"")
 	}
@@ -147,6 +149,7 @@ func PrintCommands() {
 	printCommandHelp(newGetCommand())
 	printCommandHelp(newPutCommand())
 	printCommandHelp(newRemoveCommand())
+	printCommandHelp(newTestCommand())
 }
 
 func printCommandHelp(cmd Command) {
@@ -187,6 +190,35 @@ func (c *StatusUpdateCommand) Run(url string, args []string) error {
 	}
 
 	//log.Out.Printf("Set value of %x to %s\n", key, value)
+	return nil
+}
+
+type TestCommand struct {
+	BaseCommand
+}
+
+func newTestCommand() *TestCommand {
+	return &TestCommand{BaseCommand{
+		name: "test",
+		desc: "Run a set of tests on a server.",
+		args: []string{"",
+			""}, //args is for future use
+	}}
+}
+
+func (c *TestCommand) Run(url string, args []string) error {
+	//if len(args) < 2 {	//use to require a minimum number of arguments
+	//	return errors.New("test requires arguments")
+	//}
+
+	log.Out.Println("running tests")
+	//clientapi.Test runs a set of tests on the server at url
+	err := clientapi.Test(url, args)
+	if err != nil {
+		return err
+	}
+
+	log.Out.Printf("Test run on server %s", url)
 	return nil
 }
 
