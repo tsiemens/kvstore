@@ -59,45 +59,18 @@ func Remove(url string, key [32]byte) error {
  * using the kvstore protocol */
 func Test(url string, args []string) error {
 	sendCount := 100
+	shutdown := false
 	if len(args) > 0 {
 		sendCount, _ = strconv.Atoi(args[0])
 	}
-
-	test.RunTestSuite(url, sendCount)
-	//msg, err := api.SendRecv(url, func(addr *net.UDPAddr) api.Message {
-	//	return api.NewKeyDgram(api.NewMessageUID(addr), api.CmdRemove, key)
-	//})
-	//if err != nil {
-	//	return err
-	//} else if cmdErr := api.ResponseError(msg); cmdErr != nil {
-	//	return cmdErr
-	//} else {
-	//	return nil
-	//}
-
-	//run tests here
-
-	//TODO move to test file once other tests are pushed
-
-	//test at what point node faliures break the system
-
-	var key [32]byte
-	var addressList [2]string
-	addressList[0] = "localhost:5555"
-	addressList[1] = "localhost:5556"
-
-	var i = 0
-	for i = 0; i < len(addressList); i++ {
-		err := api.Send(nil, addressList[i], func(addr *net.UDPAddr) api.Message {
-			return api.NewKeyDgram(api.NewMessageUID(addr), api.CmdShutdown, key)
-		})
-		if err != nil {
-			return err
-		} else {
-			//return nil
-			//do nothing, but progress to next loop iteration
+	if len(args) > 1 {
+		switch args[1] {
+		case "shutdown":
+			shutdown = true
 		}
 	}
+
+	test.RunTestSuite(url, sendCount, shutdown)
 
 	return nil
 }
