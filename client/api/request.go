@@ -69,5 +69,27 @@ func Test(url string, args []string) error {
 
 	//run tests here
 
+	//TODO move to test file once other tests are pushed
+
+	//test at what point node faliures break the system
+
+	var key [32]byte
+	var addressList [2]string
+	addressList[0] = "localhost:5555"
+	addressList[1] = "localhost:5556"
+
+	var i = 0
+	for i = 0; i < len(addressList); i++ {
+		err := api.Send(nil, addressList[i], func(addr *net.UDPAddr) api.Message {
+			return api.NewKeyDgram(api.NewMessageUID(addr), api.CmdShutdown, key)
+		})
+		if err != nil {
+			return err
+		} else {
+			//return nil
+			//do nothing, but progress to next loop iteration
+		}
+	}
+
 	return nil
 }
