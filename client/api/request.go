@@ -2,8 +2,10 @@ package api
 
 import (
 	"errors"
+	"github.com/tsiemens/kvstore/client/test"
 	"github.com/tsiemens/kvstore/shared/api"
 	"net"
+	"strconv"
 )
 
 /* Retrieves the value from the server at url,
@@ -56,6 +58,12 @@ func Remove(url string, key [32]byte) error {
 /* Runs a set of tests on the server at url,
  * using the kvstore protocol */
 func Test(url string, args []string) error {
+	sendCount := 100
+	if len(args) > 0 {
+		sendCount, _ = strconv.Atoi(args[0])
+	}
+
+	test.RunTestSuite(url, sendCount)
 	//msg, err := api.SendRecv(url, func(addr *net.UDPAddr) api.Message {
 	//	return api.NewKeyDgram(api.NewMessageUID(addr), api.CmdRemove, key)
 	//})
