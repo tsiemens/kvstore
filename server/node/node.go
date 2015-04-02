@@ -214,7 +214,7 @@ func (n *Node) handleNewPeersOnline(peerIds []store.Key,
 		if (&newPeerKey).Between(oldLowerBound, n.ID) {
 			nodesKeys := n.GetAllKeysForNode(newPeerKey, storeKeys)
 			// send all keys in this range
-			values := make(map[store.Key][]byte, len(nodesKeys))
+			values := make(map[store.Key]*store.StoreVal, len(nodesKeys))
 			for _, key := range nodesKeys {
 				val, err := n.Store.Get(key)
 				if err == nil {
@@ -258,7 +258,7 @@ func (n *Node) GetNextLowestPeerKeyFrom(key store.Key) store.Key {
 }
 
 // This is really irritating that we need this because of IMPORT CYCLES
-type KeyValueMigrator func(peerKey store.Key, values map[store.Key][]byte)
+type KeyValueMigrator func(peerKey store.Key, values map[store.Key]*store.StoreVal)
 
 func (n *Node) SetPeerOffline(peerId store.Key) {
 	if peer, ok := node.KnownPeers[peerId]; ok {

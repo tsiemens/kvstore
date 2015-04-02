@@ -11,19 +11,19 @@ import (
 )
 
 type kvMap struct {
-	M map[string][]byte
+	M map[string]*store.StoreVal
 }
 
-func NewKVMap(kvs map[store.Key][]byte) *kvMap {
-	keyStringMap := map[string][]byte{}
+func NewKVMap(kvs map[store.Key]*store.StoreVal) *kvMap {
+	keyStringMap := map[string]*store.StoreVal{}
 	for key, value := range kvs {
 		keyStringMap[api.KeyHex(key)] = value
 	}
 	return &kvMap{keyStringMap}
 }
 
-func (kvmap *kvMap) KeyValues() map[store.Key][]byte {
-	keyValMap := map[store.Key][]byte{}
+func (kvmap *kvMap) KeyValues() map[store.Key]*store.StoreVal {
+	keyValMap := map[store.Key]*store.StoreVal{}
 	for keyString, value := range kvmap.M {
 		key, err := api.KeyFromHex(keyString)
 		if err == nil {
@@ -37,7 +37,8 @@ func (kvmap *kvMap) KeyValues() map[store.Key][]byte {
 
 // Sends a sendRecv message with a range of key values to a node
 // Returns error if the node times out
-func SendStorePushMsg(conn *net.UDPConn, addr *net.UDPAddr, values map[store.Key][]byte) error {
+func SendStorePushMsg(conn *net.UDPConn, addr *net.UDPAddr,
+	values map[store.Key]*store.StoreVal) error {
 
 	valuesWrapper := NewKVMap(values)
 	kvdata, err := json.Marshal(valuesWrapper)
@@ -53,7 +54,7 @@ func SendStorePushMsg(conn *net.UDPConn, addr *net.UDPAddr, values map[store.Key
 	return err
 }
 
-func ParseStorePushMsgValue(data []byte) (map[store.Key][]byte, error) {
+func ParseStorePushMsgValue(data []byte) (map[store.Key]*store.StoreVal, error) {
 	values := &kvMap{}
 	err := json.Unmarshal(data, values)
 	if err != nil {
@@ -64,7 +65,7 @@ func ParseStorePushMsgValue(data []byte) (map[store.Key][]byte, error) {
 }
 
 // Hack to avoid import cycles
-func SendKeyValuesToNode(peerKey store.Key, values map[store.Key][]byte) {
+func SendKeyValuesToNode(peerKey store.Key, values map[store.Key]*store.StoreVal) {
 	n := node.GetProcessNode()
 	if peer, ok := n.KnownPeers[peerKey]; ok {
 		err := SendStorePushMsg(n.Conn, peer.Addr, values)

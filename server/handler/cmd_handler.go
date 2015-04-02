@@ -41,11 +41,11 @@ func HandleGet(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) 
 		log.D.Printf("Getting value with key %v\n", keyMsg.Key)
 		value, err := thisNode.Store.Get(store.Key(keyMsg.Key))
 		var replyMsg api.Message
-		if err != nil {
+		if err != nil || !value.Active {
 			log.E.Println(err)
 			replyMsg = api.NewBaseDgram(msg.UID(), api.RespInvalidKey)
 		} else {
-			replyMsg = api.NewValueDgram(msg.UID(), api.RespOk, value)
+			replyMsg = api.NewValueDgram(msg.UID(), api.RespOk, value.Val)
 		}
 		protocol.ReplyToGet(handler.Conn, recvAddr, replyMsg)
 		return
@@ -101,7 +101,8 @@ func HandlePut(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) 
 		var replyMsg api.Message
 		err := thisNode.Store.Put(
 			store.Key(keyValMsg.Key),
-			keyValMsg.Value)
+			keyValMsg.Value,
+			1) // TODO THIS TIMESTAMP IS TEMPORARY
 		if err != nil {
 			log.E.Println(err)
 			replyMsg = api.NewBaseDgram(msg.UID(), api.RespInvalidKey)
@@ -159,7 +160,7 @@ func HandleRemove(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAdd
 	if *ownerId == thisNode.ID {
 		log.D.Printf("Deleting value with key %v\n", keyMsg.Key)
 		var replyMsg api.Message
-		err := thisNode.Store.Remove(store.Key(keyMsg.Key))
+		err := thisNode.Store.Remove(store.Key(keyMsg.Key), 1) // TODO timestamp is temporary!
 		if err != nil {
 			log.E.Println(err)
 			replyMsg = api.NewBaseDgram(msg.UID(), api.RespInvalidKey)
@@ -299,7 +300,7 @@ func HandleStorePush(handler *MessageHandler, msg api.Message, recvAddr *net.UDP
 	// for now, receiving this message will just cause this node to store all the contents regardless of key range. Key overflow is not an issue now
 	nodeStore := node.GetProcessNode().Store
 	for key, val := range keyVals {
-		nodeStore.Put(key, val)
+		nodeStore.PutDirect(key, val)
 	}
 	protocol.ReplyToStorePush(handler.Conn, recvAddr, handler.Cache, msg)
 }

@@ -6,43 +6,54 @@ import (
 	"sort"
 )
 
+type StoreVal struct {
+	Val       []byte
+	Active    bool
+	Timestamp int // a logical timestamp
+}
+
 // representation of the consistent hashing store
 type Store struct {
-	m    map[Key][]byte
+	m    map[Key]*StoreVal
 	Lock util.Semaphore
 }
 
 func New() *Store {
 	return &Store{
-		m:    make(map[Key][]byte),
+		m:    make(map[Key]*StoreVal),
 		Lock: util.NewSemaphore(),
 	}
 }
 
-func (s *Store) Get(key Key) ([]byte, error) {
-	var val []byte
+func (s *Store) Get(key Key) (*StoreVal, error) {
 	s.Lock.Lock()
 	defer s.Lock.Unlock()
 	v, ok := s.m[key]
-	val = v
 	if !ok {
 		return nil, errors.New("No value for " + key.String())
 	}
-	return val, nil
+	return v, nil
 }
 
-func (s *Store) Put(key Key, value []byte) error {
-	s.Lock.Lock()
-	defer s.Lock.Unlock()
-	s.m[key] = value
+func (s *Store) Put(key Key, value []byte, timestamp int) error {
+	v := &StoreVal{Val: value, Active: true, Timestamp: timestamp}
+	s.PutDirect(key, v)
 	return nil
 }
 
-func (s *Store) Remove(key Key) error {
+func (s *Store) PutDirect(key Key, value *StoreVal) {
 	s.Lock.Lock()
 	defer s.Lock.Unlock()
-	if _, ok := s.m[key]; ok {
-		delete(s.m, key)
+	s.m[key] = value
+}
+
+func (s *Store) Remove(key Key, timestamp int) error {
+	s.Lock.Lock()
+	defer s.Lock.Unlock()
+	if v, ok := s.m[key]; ok {
+		v.Val = make([]byte, 0)
+		v.Active = false
+		v.Timestamp = timestamp
 		return nil
 	} else {
 		return errors.New("No value for " + key.String())
