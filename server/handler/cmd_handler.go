@@ -3,6 +3,8 @@ package handler
 import (
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"github.com/tsiemens/kvstore/server/config"
 	"github.com/tsiemens/kvstore/server/node"
 	"github.com/tsiemens/kvstore/server/protocol"
@@ -27,63 +29,137 @@ func printKeyHandleMsg(key [32]byte, owner *store.Key, thisNode *node.Node) {
 		keyString(key), owner.String(), thisNode.ID.String())
 }
 
+func printReplicaKeyHandleMsg(key [32]byte, replicas []store.Key, thisNode *node.Node) {
+	s := fmt.Sprintf("Handling Key %s\n\tMy Id is %s\n\tReplicas:\n",
+		keyString(key), thisNode.ID.String())
+	for _, k := range replicas {
+		s += fmt.Sprintf("\t%s\n", k.String())
+	}
+	log.I.Printf(s)
+}
+
+type replicaGetData struct {
+	Val *store.StoreVal
+	Err error
+}
+
+func minSuccessfulOps(attempts int) int {
+	return int((float32(attempts) / 2) + 1)
+}
+
 func HandleGet(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
 	keyMsg := msg.(*api.KeyDgram)
 	if keyMsg.Command() == api.CmdGet {
 		keyMsg.Key = convertClientKey(keyMsg.Key)
 	}
 	thisNode := node.GetProcessNode()
-	ownerId, owner := thisNode.GetPeerResponsibleForKey(keyMsg.Key)
-	printKeyHandleMsg(keyMsg.Key, ownerId, thisNode)
+	replicaIds := thisNode.GetReplicaIdsForKey(keyMsg.Key)
 
-	// If this node is responsible for key, return value
-	if *ownerId == thisNode.ID {
-		log.D.Printf("Getting value with key %v\n", keyMsg.Key)
-		value, err := thisNode.Store.Get(store.Key(keyMsg.Key))
+	printReplicaKeyHandleMsg(keyMsg.Key, replicaIds, thisNode)
+
+	respChan := make(chan *replicaGetData, node.MaxReplicas)
+	// Send get to all replicas
+
+	receivedCount := 0
+	for _, replica := range replicaIds {
+		if replica == thisNode.ID {
+			go channeledLocalGet(respChan, keyMsg.Key)
+		} else {
+			go channeledRemoteGet(respChan, handler, replica, keyMsg)
+		}
+	}
+
+	receivedStoreVals := make([]*store.StoreVal, 0, len(replicaIds))
+	for receivedCount < len(replicaIds) {
+		getData := <-respChan
+		if getData.Err != nil {
+			log.I.Printf("Failed get: %s", getData.Err)
+		} else {
+			receivedStoreVals = append(receivedStoreVals, getData.Val)
+		}
+		receivedCount++
+	}
+
+	// Get the most up to date value returned
+	if len(receivedStoreVals) >= minSuccessfulOps(len(replicaIds)) {
+		var mostUpToDate *store.StoreVal
+		for _, storeVal := range receivedStoreVals {
+			if mostUpToDate == nil {
+				mostUpToDate = storeVal
+			} else if storeVal.Timestamp > mostUpToDate.Timestamp {
+				mostUpToDate = storeVal
+			}
+		}
+
 		var replyMsg api.Message
-		if err != nil || !value.Active {
-			log.E.Println(err)
+		if !mostUpToDate.Active {
 			replyMsg = api.NewBaseDgram(msg.UID(), api.RespInvalidKey)
 		} else {
-			replyMsg = api.NewValueDgram(msg.UID(), api.RespOk, value.Val)
+			replyMsg = api.NewValueDgram(msg.UID(), api.RespOk, mostUpToDate.Val)
 		}
 		protocol.ReplyToGet(handler.Conn, recvAddr, replyMsg)
-		return
-
 	}
+	// Otherwise, we didn't get enough data to make a decision.
+	// Force timeout
+}
 
-	// If this node is not responsible for the key but is expected to be by the sending node,
-	// return a membership msg
-	if keyMsg.Command() == api.CmdIntraGet {
-		protocol.ReplyMembershipMsg(handler.Conn, recvAddr, thisNode.ID,
-			thisNode.KnownPeers, api.RespInvalidNode, msg.UID())
-		return
+func channeledLocalGet(channel chan *replicaGetData, key store.Key) {
+	value, err := node.GetProcessNode().Store.Get(key)
+	channel <- &replicaGetData{Val: value, Err: err}
+}
+
+func channeledRemoteGet(channel chan *replicaGetData, handler *MessageHandler,
+	remotePeerKey store.Key, keyMsg *api.KeyDgram) {
+
+	thisNode := node.GetProcessNode()
+	peer := thisNode.KnownPeers[remotePeerKey]
+	var storeVal *store.StoreVal
+	var retErr error
+	replyMsg := protocol.IntraNodeGet(peer.Addr.String(), keyMsg)
+	if replyMsg != nil {
+		if replyMsg.Command() == api.RespOk {
+			valMsg := replyMsg.(*api.ValueDgram)
+			retErr = json.Unmarshal(valMsg.Value, &storeVal)
+		} else if replyMsg.Command() == api.RespInvalidKey {
+			// Simulate an absent key with no priority
+			// This way, it is a valid response, to differentiate between
+			// a legit error
+			storeVal = &store.StoreVal{Active: false, Timestamp: 0}
+			retErr = nil
+		} else {
+			retErr = errors.New(fmt.Sprintf("Error %d on node %s",
+				replyMsg.Command(), remotePeerKey.String()))
+		}
+	} else { // Timeout occured
+		thisNode.SetPeerOffline(remotePeerKey)
+		protocol.InitMembershipGossip(handler.Conn, &remotePeerKey, peer)
+		retErr = errors.New(fmt.Sprintf("Timeout on node %s",
+			remotePeerKey.String()))
 	}
+	channel <- &replicaGetData{Val: storeVal, Err: retErr}
+}
 
-	// If this node it not responsible for the key but received a message from the client,
-	// relay the command to the correct node
-	if keyMsg.Command() == api.CmdGet {
-		replyMsg := protocol.IntraNodeGet(owner.Addr.String(), keyMsg)
-		if replyMsg != nil {
-			if replyMsg.Command() == api.RespInvalidNode {
-				handleMembership(replyMsg, owner.Addr)
-			} else {
-				protocol.ReplyToGet(handler.Conn, recvAddr, replyMsg)
-				log.D.Println("Replying to get")
-			}
-		} else { // Timeout occured
-			thisNode.SetPeerOffline(*ownerId)
-			newOwnerId, newOwner := thisNode.GetPeerResponsibleForKey(keyMsg.Key)
-			if *newOwnerId != thisNode.ID {
-				protocol.SendMembershipMsg(handler.Conn, newOwner.Addr, thisNode.ID,
-					map[store.Key]*node.Peer{*ownerId: owner}, api.CmdMembershipFailure)
-			}
-			protocol.InitMembershipGossip(handler.Conn, ownerId, owner)
-			// A5 TODO: here you would query the backup nodes
+func HandleIntraGet(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
+	keyMsg := msg.(*api.KeyDgram)
+	thisNode := node.GetProcessNode()
+
+	// for now, very simple. dont check if we are a legit backup
+	// just return whatever we've got
+	log.I.Printf("Getting value with key %v\n", keyMsg.Key)
+	value, err := thisNode.Store.Get(store.Key(keyMsg.Key))
+	var replyMsg api.Message
+	if err != nil {
+		log.E.Println(err)
+		replyMsg = api.NewBaseDgram(msg.UID(), api.RespInvalidKey)
+	} else {
+		valuedata, err := json.Marshal(value)
+		if err != nil {
+			replyMsg = api.NewBaseDgram(msg.UID(), api.RespInternalError)
+		} else {
+			replyMsg = api.NewValueDgram(msg.UID(), api.RespOk, valuedata)
 		}
 	}
-
-	//protocol.ReplyToGet(handler.Conn, recvAddr, replyMsg)
+	protocol.ReplyToGet(handler.Conn, recvAddr, replyMsg)
 }
 
 func HandlePut(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {

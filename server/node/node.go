@@ -18,6 +18,9 @@ import (
 const timeErr = time.Millisecond * 50
 const TimeTillMemberDrop = time.Minute * 1
 
+// This needs to be changed to 7, when replicated puts get implemented
+const MaxReplicas = 1
+
 // Node represents this machine, as one in a cluster of nodes.
 type Node struct {
 	ID                  store.Key // Not needed just yet, but it will later
@@ -139,13 +142,13 @@ func (node *Node) CleanupKnownNodes() {
 }
 
 func (node *Node) UpdateSortedKeys() {
-	node.NodeKeyList = make([]store.Key, len(node.KnownPeers)+1)
-	i := 0
-	for k, _ := range node.KnownPeers {
-		node.NodeKeyList[i] = k
-		i++
+	node.NodeKeyList = make([]store.Key, 0, len(node.KnownPeers)+1)
+	for k, peer := range node.KnownPeers {
+		if peer.Online {
+			node.NodeKeyList = append(node.NodeKeyList, k)
+		}
 	}
-	node.NodeKeyList[i] = node.ID
+	node.NodeKeyList = append(node.NodeKeyList, node.ID)
 	sort.Sort(store.Keys(node.NodeKeyList))
 }
 
@@ -157,26 +160,10 @@ func (node *Node) UpdatePeers(peers map[store.Key]*Peer, sendingPeerId store.Key
 	log.D.Println("Updating peers...")
 	for key, remotePeerVal := range peers {
 		if key != node.ID {
-			log.D.Println("updating " + key.String())
-			if _, ok := node.KnownPeers[key]; ok {
-				if time.Now().Add(timeErr).After(remotePeerVal.LastSeen) {
-					peerVal := node.KnownPeers[key]
-					if !peerVal.Online && remotePeerVal.Online {
-						newOnlineNodes = append(newOnlineNodes, key)
-					}
-					peerVal.Online = remotePeerVal.Online
-					if peerVal.LastSeen.Before(remotePeerVal.LastSeen) {
-						peerVal.LastSeen = remotePeerVal.LastSeen
-					}
-				}
-			} else {
-				node.KnownPeers[key] = remotePeerVal
-				if remotePeerVal.Online {
-					newOnlineNodes = append(newOnlineNodes, key)
-				}
+			if node.updateKnownPeer(key, remotePeerVal) {
+				// Node is new or used to be offline and is now online
+				newOnlineNodes = append(newOnlineNodes, key)
 			}
-		} else {
-			log.D.Println("ingnoring my id")
 		}
 	}
 
@@ -202,6 +189,31 @@ func (node *Node) UpdatePeers(peers map[store.Key]*Peer, sendingPeerId store.Key
 	node.UpdateSortedKeys()
 	node.handleNewPeersOnline(newOnlineNodes, oldLowerBoundKey)
 	log.D.Println("Done.")
+}
+
+// Updates the peer for key in KnownPeers with the newly received remotePeerVal
+// Returns true if the node has just come online
+func (node *Node) updateKnownPeer(key store.Key, remotePeerVal *Peer) bool {
+	isNewlyOnline := false
+	log.D.Println("updating " + key.String())
+	if _, ok := node.KnownPeers[key]; ok {
+		if time.Now().Add(timeErr).After(remotePeerVal.LastSeen) {
+			peerVal := node.KnownPeers[key]
+			if !peerVal.Online && remotePeerVal.Online {
+				isNewlyOnline = true
+			}
+			peerVal.Online = remotePeerVal.Online
+			if peerVal.LastSeen.Before(remotePeerVal.LastSeen) {
+				peerVal.LastSeen = remotePeerVal.LastSeen
+			}
+		}
+	} else {
+		node.KnownPeers[key] = remotePeerVal
+		if remotePeerVal.Online {
+			isNewlyOnline = true
+		}
+	}
+	return isNewlyOnline
 }
 
 // Handles the case when a peer was previously not known, or is now online
@@ -247,14 +259,38 @@ func (n *Node) GetNextLowestPeerKey() store.Key {
 func (n *Node) GetNextLowestPeerKeyFrom(key store.Key) store.Key {
 	for i, nodekey := range n.NodeKeyList {
 		if nodekey == key {
-			if i == 0 {
-				return n.NodeKeyList[len(n.NodeKeyList)-1]
-			} else {
-				return n.NodeKeyList[i]
-			}
+			return n.NodeKeyList[n.getPredecessorIndexOfNodeAtIndex(i)]
 		}
 	}
 	return key
+}
+
+func (n *Node) getPredecessorIndexOfNodeAtIndex(index int) int {
+	if index == 0 {
+		return len(n.NodeKeyList) - 1
+	} else {
+		return index
+	}
+}
+
+func (n *Node) GetReplicaIdsForKey(key store.Key) []store.Key {
+	headKeyPtr, _ := n.GetPeerResponsibleForKey(key)
+	var headKeyIndex int
+	for i, nodeKey := range n.NodeKeyList {
+		if nodeKey == *headKeyPtr {
+			headKeyIndex = i
+			break
+		}
+	}
+
+	keys := make([]store.Key, 0, MaxReplicas)
+	keys = append(keys, *headKeyPtr)
+	nextReplicaIndex := n.getPredecessorIndexOfNodeAtIndex(headKeyIndex)
+	for len(keys) < MaxReplicas && n.NodeKeyList[nextReplicaIndex] != *headKeyPtr {
+		keys = append(keys, n.NodeKeyList[nextReplicaIndex])
+		nextReplicaIndex = n.getPredecessorIndexOfNodeAtIndex(nextReplicaIndex)
+	}
+	return keys
 }
 
 // This is really irritating that we need this because of IMPORT CYCLES
