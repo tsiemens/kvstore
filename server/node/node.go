@@ -18,9 +18,6 @@ import (
 const timeErr = time.Millisecond * 50
 const TimeTillMemberDrop = time.Minute * 1
 
-// This needs to be changed to 7, when replicated puts get implemented
-const MaxReplicas = 1
-
 // Node represents this machine, as one in a cluster of nodes.
 type Node struct {
 	ID                  store.Key // Not needed just yet, but it will later
@@ -282,11 +279,11 @@ func (n *Node) GetReplicaIdsForKey(key store.Key) []store.Key {
 			break
 		}
 	}
-
-	keys := make([]store.Key, 0, MaxReplicas)
+	maxReplicas := config.GetConfig().MaxReplicas
+	keys := make([]store.Key, 0, maxReplicas)
 	keys = append(keys, *headKeyPtr)
 	nextReplicaIndex := n.getPredecessorIndexOfNodeAtIndex(headKeyIndex)
-	for len(keys) < MaxReplicas && n.NodeKeyList[nextReplicaIndex] != *headKeyPtr {
+	for len(keys) < maxReplicas && n.NodeKeyList[nextReplicaIndex] != *headKeyPtr {
 		keys = append(keys, n.NodeKeyList[nextReplicaIndex])
 		nextReplicaIndex = n.getPredecessorIndexOfNodeAtIndex(nextReplicaIndex)
 	}

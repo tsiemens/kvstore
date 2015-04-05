@@ -57,7 +57,7 @@ func HandleGet(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) 
 
 	printReplicaKeyHandleMsg(keyMsg.Key, replicaIds, thisNode)
 
-	respChan := make(chan *replicaGetData, node.MaxReplicas)
+	respChan := make(chan *replicaGetData, config.GetConfig().MaxReplicas)
 	// Send get to all replicas
 
 	receivedCount := 0

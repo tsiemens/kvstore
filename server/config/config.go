@@ -28,6 +28,7 @@ type Config struct {
 	NodeTimeout          time.Duration // how long a dial tried before timing out
 	DialTimeout          time.Duration
 	Hostname             string // this servers hostname
+	MaxReplicas          int
 }
 
 func Init(configPath string, useloopback bool) {

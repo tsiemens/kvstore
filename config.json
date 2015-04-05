@@ -8,6 +8,7 @@
   "DialTimeout": 3000000000,
   "NodeTimeout": 300000000000,
   "DefaultLocalhostPort": 5555,
+  "MaxReplicas": 7,
   "PeerList": [
       "plonk.cs.uwaterloo.ca:5555",
       "cs-planetlab4.cs.surrey.sfu.ca:5555",
