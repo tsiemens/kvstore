@@ -266,7 +266,7 @@ func (n *Node) getPredecessorIndexOfNodeAtIndex(index int) int {
 	if index == 0 {
 		return len(n.NodeKeyList) - 1
 	} else {
-		return index
+		return index - 1
 	}
 }
 

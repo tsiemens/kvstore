@@ -40,3 +40,15 @@ func IntraNodeRemove(url string, msg api.Message) api.Message {
 		return msg
 	}
 }
+
+func IntraNodeGetTimestamp(url string, msg api.Message) api.Message {
+	keyValueMsg := msg.(*api.KeyValueDgram)
+	msg, err := api.SendRecv(url, func(addr *net.UDPAddr) api.Message {
+		return api.NewKeyDgram(api.NewMessageUID(addr), api.CmdGetTimestamp, keyValueMsg.Key)
+	})
+	if err != nil {
+		return nil
+	} else {
+		return msg
+	}
+}

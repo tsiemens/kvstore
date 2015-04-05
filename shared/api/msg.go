@@ -19,6 +19,7 @@ const CmdShutdown = 0x04
 const CmdIntraPut = 0x05
 const CmdIntraGet = 0x06
 const CmdIntraRemove = 0x07
+const CmdGetTimestamp = 0x08
 const CmdStatusUpdate = 0x21
 const CmdAdhocUpdate = 0x22
 const CmdMembership = 0x23
@@ -41,6 +42,7 @@ const RespAdhocUpdateOK = 0x08
 const RespMalformedDatagram = 0x09
 const RespInvalidNode = 0x10
 const RespTimeout = 0x11
+const RespOkTimestamp = 0x12
 
 type BaseDgram struct {
 	uid     [16]byte

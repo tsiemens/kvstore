@@ -17,6 +17,8 @@ func ResponseError(msg Message) error {
 	switch msg.Command() {
 	case RespOk:
 		return nil
+	case RespOkTimestamp:
+		return nil
 	case RespInvalidKey:
 		return errors.New("Non-existent key requested")
 	case RespOutOfSpace:
@@ -113,7 +115,7 @@ func (self *protocolReceiver) recvMsg(timeoutms int) (Message, net.Error) {
 		} else if recvAddr.IP.Equal(self.RemoteAddr.IP) &&
 			recvAddr.Port == self.RemoteAddr.Port {
 
-			log.D.Printf("Received msg type %x [% x]\n", buff[16], buff[0:60])
+			log.D.Printf("Received msg type %x from %v\n", buff[16], recvAddr.String())
 			serverMsg, err, _ := ParseMessage(buff[0:n], RespMessageParsers)
 			if err == nil && serverMsg.UID() == self.MsgUID {
 				return serverMsg, nil

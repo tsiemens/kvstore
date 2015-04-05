@@ -6,9 +6,9 @@
   "StatusServerHttpPort": 3000,
   "UpdateFrequency": 10000000000,
   "DialTimeout": 3000000000,
-  "NodeTimeout": 300000000000,
+  "NodeTimeout": 30000000000,
   "DefaultLocalhostPort": 5555,
-  "MaxReplicas": 7,
+  "MaxReplicas": 3,
   "PeerList": [
       "plonk.cs.uwaterloo.ca:5555",
       "cs-planetlab4.cs.surrey.sfu.ca:5555",

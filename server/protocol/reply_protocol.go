@@ -6,6 +6,7 @@ import (
 	"github.com/tsiemens/kvstore/server/node"
 	"github.com/tsiemens/kvstore/server/store"
 	"github.com/tsiemens/kvstore/shared/api"
+	"github.com/tsiemens/kvstore/shared/log"
 	"net"
 	"time"
 )
@@ -22,6 +23,11 @@ func ReplyToPut(conn *net.UDPConn, recvAddr *net.UDPAddr, cache *cache.Cache,
 func ReplyToRemove(conn *net.UDPConn, recvAddr *net.UDPAddr, cache *cache.Cache,
 	replyMsg api.Message) {
 	cache.SendReply(conn, replyMsg, recvAddr)
+}
+
+func ReplyToGetTimestamp(conn *net.UDPConn, recvAddr *net.UDPAddr, replyMsg api.Message) {
+	log.D.Printf("Sending message type %d to %v\n", replyMsg.Command(), recvAddr.String())
+	conn.WriteTo(replyMsg.Bytes(), recvAddr)
 }
 
 func ReplyToStatusUpdateServer(conn *net.UDPConn, recvAddr *net.UDPAddr, cache *cache.Cache,

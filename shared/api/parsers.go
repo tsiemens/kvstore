@@ -7,6 +7,7 @@ var CmdMessageParsers = map[byte]MessagePayloadParser{
 	CmdIntraPut:                ParseKeyValueDgram,
 	CmdIntraGet:                ParseKeyDgram,
 	CmdIntraRemove:             ParseKeyDgram,
+	CmdGetTimestamp:            ParseKeyDgram,
 	CmdShutdown:                ParseKeyDgram,
 	CmdStatusUpdate:            ParseKeyValueDgram,
 	CmdAdhocUpdate:             ParseKeyValueDgram,
@@ -30,4 +31,5 @@ var RespMessageParsers = map[byte]MessagePayloadParser{
 	RespAdhocUpdateOK:    ParseKeyValueDgram,
 	RespInvalidNode:      ParseKeyValueDgram,
 	RespTimeout:          ParseBaseDgram,
+	RespOkTimestamp:      ParseValueDgram,
 }
