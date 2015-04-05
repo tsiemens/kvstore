@@ -1,6 +1,7 @@
 package protocol
 
 import (
+	"github.com/tsiemens/kvstore/server/store"
 	"github.com/tsiemens/kvstore/shared/api"
 	"net"
 )
@@ -42,9 +43,14 @@ func IntraNodeRemove(url string, msg api.Message) api.Message {
 }
 
 func IntraNodeGetTimestamp(url string, msg api.Message) api.Message {
-	keyValueMsg := msg.(*api.KeyValueDgram)
+	var key store.Key
+	if msg.Command() == api.CmdPut {
+		key = msg.(*api.KeyValueDgram).Key
+	} else {
+		key = msg.(*api.KeyDgram).Key
+	}
 	msg, err := api.SendRecv(url, func(addr *net.UDPAddr) api.Message {
-		return api.NewKeyDgram(api.NewMessageUID(addr), api.CmdGetTimestamp, keyValueMsg.Key)
+		return api.NewKeyDgram(api.NewMessageUID(addr), api.CmdGetTimestamp, key)
 	})
 	if err != nil {
 		return nil

@@ -29,7 +29,8 @@ func printKeyHandleMsg(key [32]byte, owner *store.Key, thisNode *node.Node) {
 		keyString(key), owner.String(), thisNode.ID.String())
 }
 
-func printReplicaKeyHandleMsg(key [32]byte, replicas []store.Key, thisNode *node.Node) {
+func printReplicaKeyHandleMsg(key [32]byte, thisNode *node.Node) {
+	replicas := thisNode.GetReplicaIdsForKey(key)
 	s := fmt.Sprintf("Handling Key %s\n\tMy Id is %s\n\tReplicas:\n",
 		keyString(key), thisNode.ID.String())
 	for _, k := range replicas {
@@ -57,94 +58,20 @@ func HandleGet(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) 
 	if keyMsg.Command() == api.CmdGet {
 		keyMsg.Key = convertClientKey(keyMsg.Key)
 	}
-	thisNode := node.GetProcessNode()
-	replicaIds := thisNode.GetReplicaIdsForKey(keyMsg.Key)
+	printReplicaKeyHandleMsg(keyMsg.Key, node.GetProcessNode())
+	storeval := execQuorum(api.CmdGet, keyMsg, handler, -1 /*timestamp not used*/)
 
-	printReplicaKeyHandleMsg(keyMsg.Key, replicaIds, thisNode)
-
-	respChan := make(chan *replicaData, config.GetConfig().MaxReplicas)
-	// Send get to all replicas
-
-	receivedCount := 0
-	for _, replica := range replicaIds {
-		if replica == thisNode.ID {
-			go channeledLocalGet(respChan, keyMsg.Key)
-		} else {
-			go channeledRemoteGet(respChan, handler, replica, keyMsg)
-		}
-	}
-
-	receivedStoreVals := make([]*store.StoreVal, 0, len(replicaIds))
-	for receivedCount < len(replicaIds) {
-		getData := <-respChan
-		if getData.Err != nil {
-			log.I.Printf("Failed get: %s", getData.Err)
-		} else {
-			receivedStoreVals = append(receivedStoreVals, getData.Val)
-		}
-		receivedCount++
-	}
-
-	// Get the most up to date value returned
-	if len(receivedStoreVals) >= minSuccessfulOps(len(replicaIds)) {
-		var mostUpToDate *store.StoreVal
-		for _, storeVal := range receivedStoreVals {
-			if mostUpToDate == nil {
-				mostUpToDate = storeVal
-			} else if storeVal.Timestamp > mostUpToDate.Timestamp {
-				mostUpToDate = storeVal
-			}
-		}
-
+	if storeval != nil {
 		var replyMsg api.Message
-		if !mostUpToDate.Active {
+		if !storeval.Active {
 			replyMsg = api.NewBaseDgram(msg.UID(), api.RespInvalidKey)
 		} else {
-			replyMsg = api.NewValueDgram(msg.UID(), api.RespOk, mostUpToDate.Val)
+			replyMsg = api.NewValueDgram(msg.UID(), api.RespOk, storeval.Val)
 		}
 		protocol.ReplyToGet(handler.Conn, recvAddr, replyMsg)
 	}
 	// Otherwise, we didn't get enough data to make a decision.
 	// Force timeout
-}
-
-func channeledLocalGet(channel chan *replicaData, key store.Key) {
-	value, err := node.GetProcessNode().Store.Get(key)
-	if err != nil {
-		log.E.Println(err)
-	}
-	channel <- &replicaData{Val: value, Err: err}
-}
-
-func channeledRemoteGet(channel chan *replicaData, handler *MessageHandler,
-	remotePeerKey store.Key, keyMsg *api.KeyDgram) {
-
-	thisNode := node.GetProcessNode()
-	peer := thisNode.KnownPeers[remotePeerKey]
-	var storeVal *store.StoreVal
-	var retErr error
-	replyMsg := protocol.IntraNodeGet(peer.Addr.String(), keyMsg)
-	if replyMsg != nil {
-		if replyMsg.Command() == api.RespOk {
-			valMsg := replyMsg.(*api.ValueDgram)
-			retErr = json.Unmarshal(valMsg.Value, &storeVal)
-		} else if replyMsg.Command() == api.RespInvalidKey {
-			// Simulate an absent key with no priority
-			// This way, it is a valid response, to differentiate between
-			// a legit error
-			storeVal = &store.StoreVal{Active: false, Timestamp: 0}
-			retErr = nil
-		} else {
-			retErr = errors.New(fmt.Sprintf("Error %d on node %s",
-				replyMsg.Command(), remotePeerKey.String()))
-		}
-	} else { // Timeout occured
-		thisNode.SetPeerOffline(remotePeerKey)
-		protocol.InitMembershipGossip(handler.Conn, &remotePeerKey, peer)
-		retErr = errors.New(fmt.Sprintf("Timeout on node %s",
-			remotePeerKey.String()))
-	}
-	channel <- &replicaData{Val: storeVal, Err: retErr}
 }
 
 func HandleIntraGet(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
@@ -171,156 +98,26 @@ func HandleIntraGet(handler *MessageHandler, msg api.Message, recvAddr *net.UDPA
 }
 
 func HandlePut(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
-	thisNode := node.GetProcessNode()
 	keyValMsg := msg.(*api.KeyValueDgram)
 	if keyValMsg.Command() == api.CmdPut {
 		keyValMsg.Key = convertClientKey(keyValMsg.Key)
 	}
-	replicaIds := thisNode.GetReplicaIdsForKey(keyValMsg.Key)
 
-	printReplicaKeyHandleMsg(keyValMsg.Key, replicaIds, thisNode)
+	printReplicaKeyHandleMsg(keyValMsg.Key, node.GetProcessNode())
 
-	respVersionChan := make(chan *replicaVersionData, config.GetConfig().MaxReplicas)
-
-	receivedCount := 0
-
-	log.D.Println("Waiting for write majority...")
-	for _, replica := range replicaIds {
-		if replica == thisNode.ID {
-			go channeledLocalVersion(respVersionChan, keyValMsg.Key)
-		} else {
-			go channeledRemoteVersion(respVersionChan, handler, replica, keyValMsg)
-		}
-	}
-
-	var latestVersion int
-	receivedVersionVals := make([]int, 0, len(replicaIds))
-	for receivedCount < len(replicaIds) {
-		getVersion := <-respVersionChan
-		if getVersion.Err != nil {
-			log.I.Printf("Failed version get: %s\n", getVersion.Err)
-		} else {
-			receivedVersionVals = append(receivedVersionVals, getVersion.Version)
-		}
-		receivedCount++
-	}
-
-	if len(receivedVersionVals) >= minSuccessfulOps(len(replicaIds)) {
-		log.D.Println("Received write majority")
-		latestVersion = receivedVersionVals[0]
-		for _, version := range receivedVersionVals {
-			if version > latestVersion {
-				latestVersion = version
-			}
-		}
-	} else {
-		//TODO release nodes and timeout
+	mostUpToDate := execQuorum(api.CmdGetTimestamp, msg, handler, -1 /*timestamp not used */)
+	if mostUpToDate == nil {
+		// timeout
 		return
 	}
 
-	respChan := make(chan *replicaVersionData, config.GetConfig().MaxReplicas)
-	receivedCount = 0
-
-	log.D.Println("Writing to backup nodes...")
-	for _, replica := range replicaIds {
-		if replica == thisNode.ID {
-			go channeledLocalPut(respChan, keyValMsg.Key, keyValMsg.Value, latestVersion)
-		} else {
-			go channeledRemotePut(respChan, handler, replica, keyValMsg, latestVersion)
-		}
-	}
-	receivedStoreVals := make([]*replicaVersionData, 0, len(replicaIds))
-	for receivedCount < len(replicaIds) {
-		versionData := <-respChan
-		if versionData.Err != nil {
-			log.I.Printf("Failed put: %s\n", versionData.Err)
-		} else {
-			receivedStoreVals = append(receivedStoreVals, versionData)
-		}
-		receivedCount++
-	}
-
+	mostUpToDate = execQuorum(api.CmdPut, msg, handler, mostUpToDate.Timestamp)
 	var replyMsg api.Message
-	if len(receivedStoreVals) >= minSuccessfulOps(len(replicaIds)) {
+	if mostUpToDate != nil {
 		replyMsg = api.NewValueDgram(msg.UID(), api.RespOk, make([]byte, 0, 0))
 		protocol.ReplyToPut(handler.Conn, recvAddr, handler.Cache, replyMsg)
-
 	}
 
-}
-
-func channeledLocalVersion(channel chan *replicaVersionData, key store.Key) {
-	value, err := node.GetProcessNode().Store.Get(key)
-	if err != nil {
-		log.D.Println(err)
-	}
-	if value != nil {
-		channel <- &replicaVersionData{Version: value.Timestamp, Err: nil}
-	} else {
-		channel <- &replicaVersionData{Version: 0, Err: nil}
-	}
-}
-
-func channeledRemoteVersion(channel chan *replicaVersionData, handler *MessageHandler,
-	remotePeerKey store.Key, keyValueMsg *api.KeyValueDgram) {
-
-	thisNode := node.GetProcessNode()
-	peer := thisNode.KnownPeers[remotePeerKey]
-	var versionVal *replicaVersionData
-	var retErr error
-	replyMsg := protocol.IntraNodeGetTimestamp(peer.Addr.String(), keyValueMsg)
-	if replyMsg != nil {
-		if replyMsg.Command() == api.RespOkTimestamp {
-			valMsg := replyMsg.(*api.ValueDgram)
-			retErr = json.Unmarshal(valMsg.Value, &versionVal)
-		} else if replyMsg.Command() == api.RespInvalidKey {
-			// TODO ???
-		} else {
-			retErr = errors.New(fmt.Sprintf("Error %d on node %s\n",
-				replyMsg.Command(), remotePeerKey.String()))
-		}
-	} else { // timeout occured
-		thisNode.SetPeerOffline(remotePeerKey)
-		protocol.InitMembershipGossip(handler.Conn, &remotePeerKey, peer)
-		retErr = errors.New(fmt.Sprintf("Timeout on node %s\n",
-			remotePeerKey.String()))
-	}
-	channel <- &replicaVersionData{Version: versionVal.Version, Err: retErr}
-
-}
-
-func channeledLocalPut(channel chan *replicaVersionData, key store.Key, value []byte, timestamp int) {
-	log.I.Printf("Putting value with key %v\n", key)
-	err := node.GetProcessNode().Store.Put(key, value, timestamp+1) // TODO increment here?
-	channel <- &replicaVersionData{Version: timestamp + 1, Err: err}
-}
-
-//  merged with channeledRemoteGet into one function?
-func channeledRemotePut(channel chan *replicaVersionData, handler *MessageHandler,
-	remotePeerKey store.Key, keyValueMsg *api.KeyValueDgram, timestamp int) {
-
-	thisNode := node.GetProcessNode()
-	peer := thisNode.KnownPeers[remotePeerKey]
-	var storeVal *store.StoreVal
-	var retErr error
-	replyMsg := protocol.IntraNodePut(peer.Addr.String(), keyValueMsg)
-	if replyMsg != nil {
-		if replyMsg.Command() == api.RespOk {
-			valMsg := replyMsg.(*api.ValueDgram)
-			retErr = json.Unmarshal(valMsg.Value, &storeVal)
-		} else if replyMsg.Command() == api.RespInvalidKey {
-			// TODO ???
-		} else {
-			retErr = errors.New(fmt.Sprintf("Error %d on node %s\n",
-				replyMsg.Command(), remotePeerKey.String()))
-		}
-	} else { // timeout occured
-		thisNode.SetPeerOffline(remotePeerKey)
-		protocol.InitMembershipGossip(handler.Conn, &remotePeerKey, peer)
-		retErr = errors.New(fmt.Sprintf("Timeout on node %s\n",
-			remotePeerKey.String()))
-	}
-	channel <- &replicaVersionData{Version: storeVal.Timestamp, Err: retErr}
 }
 
 func HandleIntraPut(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
@@ -347,58 +144,187 @@ func HandleIntraPut(handler *MessageHandler, msg api.Message, recvAddr *net.UDPA
 }
 
 func HandleRemove(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
-	thisNode := node.GetProcessNode()
 	keyMsg := msg.(*api.KeyDgram)
 	if keyMsg.Command() == api.CmdRemove {
 		keyMsg.Key = convertClientKey(keyMsg.Key)
 	}
-	ownerId, owner := thisNode.GetPeerResponsibleForKey(keyMsg.Key)
-	printKeyHandleMsg(keyMsg.Key, ownerId, thisNode)
-
-	// If this node is responsible for key, return value
-	if *ownerId == thisNode.ID {
-		log.D.Printf("Deleting value with key %v\n", keyMsg.Key)
-		var replyMsg api.Message
-		err := thisNode.Store.Remove(store.Key(keyMsg.Key), 1) // TODO timestamp is temporary!
-		if err != nil {
-			log.E.Println(err)
-			replyMsg = api.NewBaseDgram(msg.UID(), api.RespInvalidKey)
-		} else {
-			replyMsg = api.NewValueDgram(msg.UID(), api.RespOk, make([]byte, 0, 0))
-		}
+	printReplicaKeyHandleMsg(keyMsg.Key, node.GetProcessNode())
+	mostUpToDate := execQuorum(api.CmdGetTimestamp, keyMsg, handler, -1 /*timestamp not used */)
+	if !mostUpToDate.Active {
+		replyMsg := api.NewBaseDgram(msg.UID(), api.RespInvalidKey)
 		protocol.ReplyToRemove(handler.Conn, recvAddr, handler.Cache, replyMsg)
 		return
 	}
 
-	// If this node is not responsible for the key but is expected to be by the sending node,
-	// return a membership msg
-	if keyMsg.Command() == api.CmdIntraRemove {
-		protocol.ReplyMembershipMsg(handler.Conn, recvAddr, thisNode.ID,
-			thisNode.KnownPeers, api.RespInvalidNode, msg.UID())
-		return
+	mostUpToDate = execQuorum(api.CmdRemove, keyMsg, handler, mostUpToDate.Timestamp)
+	if mostUpToDate != nil {
+		replyMsg := api.NewValueDgram(msg.UID(), api.RespOk, make([]byte, 0, 0))
+		protocol.ReplyToRemove(handler.Conn, recvAddr, handler.Cache, replyMsg)
 	}
+}
 
-	// If this node it not responsible for the key but received a message from the client,
-	// relay the command to the correct node
-	if keyMsg.Command() == api.CmdRemove {
-		replyMsg := protocol.IntraNodeRemove(owner.Addr.String(), keyMsg)
-		if replyMsg != nil {
-			if replyMsg.Command() == api.RespInvalidNode {
-				handleMembership(replyMsg, owner.Addr)
-			} else {
-				protocol.ReplyToRemove(handler.Conn, recvAddr, handler.Cache, replyMsg)
-			}
+func HandleIntraRemove(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
+	keyMsg := msg.(*api.KeyDgram)
+	thisNode := node.GetProcessNode()
+	// Need to implement timestamp messages and include here
+	log.I.Printf("Removing value with key %v\n", keyMsg.Key)
+	err := thisNode.Store.Remove(keyMsg.Key, 2 /*timestamp*/)
+	var replyMsg api.Message
+	if err != nil {
+		replyMsg = api.NewBaseDgram(msg.UID(), api.RespInvalidKey)
+		log.D.Println(err)
+	} else {
+		// we return true to inidicate the value has been deleted
+		storeVal := &store.StoreVal{Val: make([]byte, 0), Active: true, Timestamp: 2}
+		valuedata, jsonerr := json.Marshal(storeVal)
+		if jsonerr != nil {
+			log.E.Println(err)
+		}
+		replyMsg = api.NewValueDgram(msg.UID(), api.RespOk, valuedata)
+	}
+	protocol.ReplyToRemove(handler.Conn, recvAddr, handler.Cache, replyMsg)
+
+}
+
+func execQuorum(cmd byte, msg api.Message, handler *MessageHandler, timestamp int) *store.StoreVal {
+	var key store.Key
+	if msg.Command() == api.CmdPut {
+		key = msg.(*api.KeyValueDgram).Key
+	} else {
+		key = msg.(*api.KeyDgram).Key
+	}
+	thisNode := node.GetProcessNode()
+	replicaIds := thisNode.GetReplicaIdsForKey(key)
+	respChan := make(chan *replicaData, config.GetConfig().MaxReplicas)
+	receivedCount := 0
+	for _, replica := range replicaIds {
+		if replica == thisNode.ID {
+			go channeledLocalCommand(respChan, cmd, msg, timestamp)
 		} else {
-			thisNode.SetPeerOffline(*ownerId)
-			newOwnerId, newOwner := thisNode.GetPeerResponsibleForKey(keyMsg.Key)
-			if *newOwnerId != thisNode.ID {
-				protocol.SendMembershipMsg(handler.Conn, newOwner.Addr, thisNode.ID,
-					map[store.Key]*node.Peer{*ownerId: owner}, api.CmdMembershipFailure)
-			}
-			protocol.InitMembershipGossip(handler.Conn, ownerId, owner)
-			// A5 TODO: here you would query the backup nodes
+			go channeledRemoteCommand(respChan, cmd, handler, replica, msg)
 		}
 	}
+
+	receivedStoreVals := make([]*store.StoreVal, 0, len(replicaIds))
+	for receivedCount < len(replicaIds) {
+		data := <-respChan
+		if data.Err != nil {
+			log.I.Printf("Failed get from %s: %s", keyString(replicaIds[receivedCount]), data.Err)
+		} else {
+			log.I.Println("Receive successful")
+			receivedStoreVals = append(receivedStoreVals, data.Val)
+		}
+		receivedCount++
+	}
+
+	// Get the highest timestamp value
+	if len(receivedStoreVals) >= minSuccessfulOps(len(replicaIds)) {
+		var mostUpToDate *store.StoreVal
+		for _, storeVal := range receivedStoreVals {
+			if mostUpToDate == nil {
+				mostUpToDate = storeVal
+			} else if storeVal.Timestamp > mostUpToDate.Timestamp {
+				mostUpToDate = storeVal
+			}
+		}
+		return mostUpToDate
+	} else {
+		return nil
+	}
+	// Otherwise, we didn't get enough data to make a decision.
+	// Force timeout
+
+}
+
+func channeledLocalCommand(channel chan *replicaData, cmd byte, msg api.Message, timestamp int) {
+	var key store.Key
+	if msg.Command() == api.CmdPut {
+		key = msg.(*api.KeyValueDgram).Key
+	} else {
+		key = msg.(*api.KeyDgram).Key
+	}
+	switch cmd {
+	case api.CmdGet:
+		log.I.Printf("Getting value with key %v\n", key)
+		value, err := node.GetProcessNode().Store.Get(key)
+		if err != nil {
+			log.E.Println(err)
+		}
+		channel <- &replicaData{Val: value, Err: err}
+	case api.CmdPut:
+		log.I.Printf("Putting value with key %v\n", key)
+		err := node.GetProcessNode().Store.Put(key, msg.(*api.KeyValueDgram).Value, timestamp+1) // TODO increment here?
+		value, _ := node.GetProcessNode().Store.Get(key)
+		channel <- &replicaData{Val: value, Err: err}
+	case api.CmdRemove:
+		log.I.Printf("Removing value with key %v\n", key)
+		err := node.GetProcessNode().Store.Remove(key, timestamp+1) // TODO increment here?
+		if err != nil {
+			channel <- &replicaData{Val: nil, Err: err}
+		} else {
+			value, _ := node.GetProcessNode().Store.Get(key)
+			channel <- &replicaData{Val: &store.StoreVal{Val: value.Val, Active: true, Timestamp: value.Timestamp}, Err: err}
+		}
+	case api.CmdGetTimestamp:
+		log.I.Printf("Getting timestamp for key\n")
+		value, _ := node.GetProcessNode().Store.Get(key)
+		if value != nil {
+			channel <- &replicaData{Val: &store.StoreVal{Val: value.Val, Active: value.Active, Timestamp: value.Timestamp}, Err: nil}
+		} else {
+			if cmd == api.CmdPut {
+				log.D.Println("Record not found. Initiating timestamp")
+				channel <- &replicaData{Val: &store.StoreVal{Val: make([]byte, 0, 0), Active: true, Timestamp: 0}, Err: nil}
+			} else {
+
+				channel <- &replicaData{Val: &store.StoreVal{Val: make([]byte, 0, 0), Active: false, Timestamp: 0}, Err: nil}
+			}
+		}
+	default:
+		channel <- &replicaData{Val: nil, Err: errors.New(fmt.Sprintf("Unknown command received\n"))}
+	}
+
+}
+
+func channeledRemoteCommand(channel chan *replicaData, cmd byte, handler *MessageHandler,
+	remotePeerKey store.Key, msg api.Message) {
+	thisNode := node.GetProcessNode()
+	peer := thisNode.KnownPeers[remotePeerKey]
+	var storeVal *store.StoreVal
+	var replyMsg api.Message
+	switch cmd {
+	case api.CmdGet:
+		replyMsg = protocol.IntraNodeGet(peer.Addr.String(), msg)
+	case api.CmdPut:
+		replyMsg = protocol.IntraNodePut(peer.Addr.String(), msg)
+	case api.CmdRemove:
+		replyMsg = protocol.IntraNodeRemove(peer.Addr.String(), msg)
+	case api.CmdGetTimestamp:
+		replyMsg = protocol.IntraNodeGetTimestamp(peer.Addr.String(), msg)
+	default:
+		replyMsg = nil
+	}
+	var retErr error
+	if replyMsg != nil {
+		if replyMsg.Command() == api.RespOk || replyMsg.Command() == api.RespOkTimestamp {
+			valMsg := replyMsg.(*api.ValueDgram)
+			retErr = json.Unmarshal(valMsg.Value, &storeVal)
+		} else if replyMsg.Command() == api.RespInvalidKey {
+			// Simulate an absent key with no priority
+			// This way, it is a valid response, to differentiate between
+			// a legit error
+			storeVal = &store.StoreVal{Active: false, Timestamp: 0}
+			retErr = nil
+		} else {
+			retErr = errors.New(fmt.Sprintf("Error %d on node %s",
+				replyMsg.Command(), remotePeerKey.String()))
+		}
+	} else { // Timeout occured
+		thisNode.SetPeerOffline(remotePeerKey)
+		protocol.InitMembershipGossip(handler.Conn, &remotePeerKey, peer)
+		retErr = errors.New(fmt.Sprintf("Timeout on node %s",
+			remotePeerKey.String()))
+	}
+	channel <- &replicaData{Val: storeVal, Err: retErr}
 
 }
 
@@ -409,14 +335,14 @@ func HandleGetTimestamp(handler *MessageHandler, msg api.Message, recvAddr *net.
 	var replyMsg api.Message
 	// If timestamp doesn't exist, return 0
 	if err != nil {
-		log.D.Println(err)
-		valuedata, jsonerr := json.Marshal(&replicaVersionData{Version: 0, Err: nil})
+		log.D.Println("Key not found. Initiating timestamp")
+		valuedata, jsonerr := json.Marshal(&store.StoreVal{Val: make([]byte, 0), Active: true, Timestamp: 0})
 		if jsonerr != nil {
 			log.E.Println(jsonerr)
 		}
 		replyMsg = api.NewValueDgram(msg.UID(), api.RespOkTimestamp, valuedata)
 	} else {
-		valuedata, jsonerr := json.Marshal(&replicaVersionData{Version: storeVal.Timestamp, Err: nil})
+		valuedata, jsonerr := json.Marshal(&store.StoreVal{Val: storeVal.Val, Active: storeVal.Active, Timestamp: storeVal.Timestamp})
 		if jsonerr != nil {
 			log.E.Println(jsonerr)
 		}

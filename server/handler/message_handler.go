@@ -31,7 +31,7 @@ func NewDefaultCmdHandlerSet() map[byte]CmdHandler {
 		api.CmdShutdown:                HandleShutdown,
 		api.CmdIntraPut:                HandleIntraPut,
 		api.CmdIntraGet:                HandleIntraGet,
-		api.CmdIntraRemove:             HandleRemove,
+		api.CmdIntraRemove:             HandleIntraRemove,
 		api.CmdGetTimestamp:            HandleGetTimestamp,
 		api.CmdStatusUpdate:            HandleStatusUpdate,
 		api.CmdAdhocUpdate:             HandleAdhocUpdate,
