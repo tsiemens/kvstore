@@ -168,7 +168,7 @@ func HandleIntraRemove(handler *MessageHandler, msg api.Message, recvAddr *net.U
 	thisNode := node.GetProcessNode()
 	// Need to implement timestamp messages and include here
 	log.I.Printf("Removing value with key %v\n", keyMsg.Key)
-	err := thisNode.Store.Remove(keyMsg.Key, 2 /*timestamp*/)
+	err := thisNode.Store.Remove(keyMsg.Key, 2 /*timestamp*/) //TODO use actual timestamp, not hardcoded value
 	var replyMsg api.Message
 	if err != nil {
 		replyMsg = api.NewBaseDgram(msg.UID(), api.RespInvalidKey)
@@ -183,6 +183,44 @@ func HandleIntraRemove(handler *MessageHandler, msg api.Message, recvAddr *net.U
 		replyMsg = api.NewValueDgram(msg.UID(), api.RespOk, valuedata)
 	}
 	protocol.ReplyToRemove(handler.Conn, recvAddr, handler.Cache, replyMsg)
+
+}
+
+//handle internal writting, called by HandleInternalPut and HandleInternalRemove
+func InternalDataWrite(handler *MessageHandler, s store.StoreVal, msg api.Message, recvAddr *net.UDPAddr) {
+	keyMsg := msg.(*api.KeyDgram)
+	thisNode := node.GetProcessNode()
+	// Need to implement timestamp messages and include here
+	log.I.Printf("Removing value with key %v\n", keyMsg.Key)
+
+	if s.Active == false {
+		//removeing here
+		err := thisNode.Store.Remove(keyMsg.Key, s.Timestamp) //TODO use actual timestamp, not hardcoded value
+	} else {
+		//put here
+		storeVal, err := thisNode.Store.Get(keyValueMsg.Key) //item is active, so write data
+	}
+	var replyMsg api.Message
+	if err != nil {
+		replyMsg = api.NewBaseDgram(msg.UID(), api.RespInvalidKey)
+		log.E.Println(err)
+	} else {
+		// we return true to inidicate the value has been deleted
+		if s.Active == false {
+			//we are removeing here so we need to create a new storeVal
+			storeVal := &store.StoreVal{Val: make([]byte, 0), Active: true, Timestamp: s.Timestamp}
+		}
+		valuedata, jsonerr := json.Marshal(storeVal)
+		if jsonerr != nil {
+			log.E.Println(err)
+		}
+		replyMsg = api.NewValueDgram(msg.UID(), api.RespOk, valuedata)
+	}
+	if s.Active == false {
+		protocol.ReplyToRemove(handler.Conn, recvAddr, handler.Cache, replyMsg)
+	} else {
+		protocol.ReplyToPut(handler.Conn, recvAddr, handler.Cache, replyMsg)
+	}
 
 }
 
