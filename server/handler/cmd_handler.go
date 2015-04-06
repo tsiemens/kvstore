@@ -156,6 +156,7 @@ func IntraDataWrite(handler *MessageHandler, msg api.Message, recvAddr *net.UDPA
 	thisNode := node.GetProcessNode()
 
 	var storeVal *store.StoreVal
+
 	err := json.Unmarshal(keyValueMsg.Value, &storeVal)
 	if err != nil {
 		log.E.Println(err)
@@ -167,8 +168,9 @@ func IntraDataWrite(handler *MessageHandler, msg api.Message, recvAddr *net.UDPA
 		}
 		return
 	}
+	putData := storeVal.Active
 
-	if storeVal.Active == true {
+	if putData == true {
 		log.I.Printf("Putting value with key %v\n", keyValueMsg.Key)
 		err = thisNode.Store.Put(keyValueMsg.Key, storeVal.Val, storeVal.Timestamp)
 	} else {
@@ -186,7 +188,7 @@ func IntraDataWrite(handler *MessageHandler, msg api.Message, recvAddr *net.UDPA
 		if jsonerr != nil {
 			log.E.Println(err)
 			replyMsg = api.NewBaseDgram(msg.UID(), api.RespInternalError)
-			if storeVal.Active == true {
+			if putData == true {
 				protocol.ReplyToPut(handler.Conn, recvAddr, handler.Cache, replyMsg)
 			} else {
 				protocol.ReplyToRemove(handler.Conn, recvAddr, handler.Cache, replyMsg)
@@ -195,7 +197,7 @@ func IntraDataWrite(handler *MessageHandler, msg api.Message, recvAddr *net.UDPA
 		}
 		replyMsg = api.NewValueDgram(msg.UID(), api.RespOk, valuedata)
 	}
-	if storeVal.Active == true {
+	if putData == true {
 		protocol.ReplyToPut(handler.Conn, recvAddr, handler.Cache, replyMsg)
 	} else {
 		protocol.ReplyToRemove(handler.Conn, recvAddr, handler.Cache, replyMsg)
