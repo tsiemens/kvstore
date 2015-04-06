@@ -121,26 +121,8 @@ func HandlePut(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) 
 }
 
 func HandleIntraPut(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
-	keyValueMsg := msg.(*api.KeyValueDgram)
-	thisNode := node.GetProcessNode()
-
-	// Need to implement timestamp messages and include here
-	log.I.Printf("Putting value with key %v\n", keyValueMsg.Key)
-	err := thisNode.Store.Put(keyValueMsg.Key, keyValueMsg.Value, 2 /* timestamp */)
-	storeVal, err := thisNode.Store.Get(keyValueMsg.Key)
-	var replyMsg api.Message
-	if err != nil {
-		log.E.Println(err)
-		replyMsg = api.NewBaseDgram(msg.UID(), api.RespInvalidKey)
-	} else {
-		valuedata, jsonerr := json.Marshal(storeVal)
-		if jsonerr != nil {
-			log.E.Println(err)
-		}
-		replyMsg = api.NewValueDgram(msg.UID(), api.RespOk, valuedata)
-	}
-	protocol.ReplyToPut(handler.Conn, recvAddr, handler.Cache, replyMsg)
-
+	//this is a wrapper function that calls intraDataWrite
+	IntraDataWrite(handler, msg, recvAddr)
 }
 
 func HandleRemove(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
@@ -164,62 +146,59 @@ func HandleRemove(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAdd
 }
 
 func HandleIntraRemove(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
-	keyMsg := msg.(*api.KeyDgram)
+	//this is a wrapper function that calls intraDataWrite
+	IntraDataWrite(handler, msg, recvAddr)
+}
+
+//handle internal writting, called by HandleInternalPut and HandleInternalRemove
+func IntraDataWrite(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
+	keyValueMsg := msg.(*api.KeyValueDgram)
 	thisNode := node.GetProcessNode()
-	// Need to implement timestamp messages and include here
-	log.I.Printf("Removing value with key %v\n", keyMsg.Key)
-	err := thisNode.Store.Remove(keyMsg.Key, 2 /*timestamp*/) //TODO use actual timestamp, not hardcoded value
+
+	var storeVal *store.StoreVal
+	err := json.Unmarshal(keyValueMsg.Value, &storeVal)
+	if err != nil {
+		log.E.Println(err)
+		replyMsg := api.NewBaseDgram(msg.UID(), api.RespInternalError)
+		if storeVal.Active == true {
+			protocol.ReplyToPut(handler.Conn, recvAddr, handler.Cache, replyMsg)
+		} else {
+			protocol.ReplyToRemove(handler.Conn, recvAddr, handler.Cache, replyMsg)
+		}
+		return
+	}
+
+	if storeVal.Active == true {
+		log.I.Printf("Putting value with key %v\n", keyValueMsg.Key)
+		err = thisNode.Store.Put(keyValueMsg.Key, storeVal.Val, storeVal.Timestamp)
+	} else {
+		log.I.Printf("Removing value with key %v\n", keyValueMsg.Key)
+		err = thisNode.Store.Remove(keyValueMsg.Key, storeVal.Timestamp)
+		storeVal = &store.StoreVal{Val: make([]byte, 0), Active: true, Timestamp: storeVal.Timestamp}
+	}
+
 	var replyMsg api.Message
 	if err != nil {
 		replyMsg = api.NewBaseDgram(msg.UID(), api.RespInvalidKey)
 		log.D.Println(err)
 	} else {
-		// we return true to inidicate the value has been deleted
-		storeVal := &store.StoreVal{Val: make([]byte, 0), Active: true, Timestamp: 2}
 		valuedata, jsonerr := json.Marshal(storeVal)
 		if jsonerr != nil {
 			log.E.Println(err)
+			replyMsg = api.NewBaseDgram(msg.UID(), api.RespInternalError)
+			if storeVal.Active == true {
+				protocol.ReplyToPut(handler.Conn, recvAddr, handler.Cache, replyMsg)
+			} else {
+				protocol.ReplyToRemove(handler.Conn, recvAddr, handler.Cache, replyMsg)
+			}
+			return
 		}
 		replyMsg = api.NewValueDgram(msg.UID(), api.RespOk, valuedata)
 	}
-	protocol.ReplyToRemove(handler.Conn, recvAddr, handler.Cache, replyMsg)
-
-}
-
-//handle internal writting, called by HandleInternalPut and HandleInternalRemove
-func InternalDataWrite(handler *MessageHandler, s store.StoreVal, msg api.Message, recvAddr *net.UDPAddr) {
-	keyMsg := msg.(*api.KeyDgram)
-	thisNode := node.GetProcessNode()
-	// Need to implement timestamp messages and include here
-	log.I.Printf("Removing value with key %v\n", keyMsg.Key)
-
-	if s.Active == false {
-		//removeing here
-		err := thisNode.Store.Remove(keyMsg.Key, s.Timestamp) //TODO use actual timestamp, not hardcoded value
-	} else {
-		//put here
-		storeVal, err := thisNode.Store.Get(keyValueMsg.Key) //item is active, so write data
-	}
-	var replyMsg api.Message
-	if err != nil {
-		replyMsg = api.NewBaseDgram(msg.UID(), api.RespInvalidKey)
-		log.E.Println(err)
-	} else {
-		// we return true to inidicate the value has been deleted
-		if s.Active == false {
-			//we are removeing here so we need to create a new storeVal
-			storeVal := &store.StoreVal{Val: make([]byte, 0), Active: true, Timestamp: s.Timestamp}
-		}
-		valuedata, jsonerr := json.Marshal(storeVal)
-		if jsonerr != nil {
-			log.E.Println(err)
-		}
-		replyMsg = api.NewValueDgram(msg.UID(), api.RespOk, valuedata)
-	}
-	if s.Active == false {
-		protocol.ReplyToRemove(handler.Conn, recvAddr, handler.Cache, replyMsg)
-	} else {
+	if storeVal.Active == true {
 		protocol.ReplyToPut(handler.Conn, recvAddr, handler.Cache, replyMsg)
+	} else {
+		protocol.ReplyToRemove(handler.Conn, recvAddr, handler.Cache, replyMsg)
 	}
 
 }
@@ -239,7 +218,7 @@ func execQuorum(cmd byte, msg api.Message, handler *MessageHandler, timestamp in
 		if replica == thisNode.ID {
 			go channeledLocalCommand(respChan, cmd, msg, timestamp)
 		} else {
-			go channeledRemoteCommand(respChan, cmd, handler, replica, msg)
+			go channeledRemoteCommand(respChan, cmd, handler, replica, msg, timestamp)
 		}
 	}
 
@@ -291,31 +270,26 @@ func channeledLocalCommand(channel chan *replicaData, cmd byte, msg api.Message,
 		channel <- &replicaData{Val: value, Err: err}
 	case api.CmdPut:
 		log.I.Printf("Putting value with key %v\n", key)
-		err := node.GetProcessNode().Store.Put(key, msg.(*api.KeyValueDgram).Value, timestamp+1) // TODO increment here?
+		err := node.GetProcessNode().Store.Put(key, msg.(*api.KeyValueDgram).Value, timestamp)
 		value, _ := node.GetProcessNode().Store.Get(key)
 		channel <- &replicaData{Val: value, Err: err}
 	case api.CmdRemove:
 		log.I.Printf("Removing value with key %v\n", key)
-		err := node.GetProcessNode().Store.Remove(key, timestamp+1) // TODO increment here?
+		err := node.GetProcessNode().Store.Remove(key, timestamp)
 		if err != nil {
 			channel <- &replicaData{Val: nil, Err: err}
 		} else {
 			value, _ := node.GetProcessNode().Store.Get(key)
+			// we return Active: True to signal to the routing node that the write was successful.
 			channel <- &replicaData{Val: &store.StoreVal{Val: value.Val, Active: true, Timestamp: value.Timestamp}, Err: err}
 		}
 	case api.CmdGetTimestamp:
 		log.I.Printf("Getting timestamp for key\n")
 		value, _ := node.GetProcessNode().Store.Get(key)
 		if value != nil {
-			channel <- &replicaData{Val: &store.StoreVal{Val: value.Val, Active: value.Active, Timestamp: value.Timestamp}, Err: nil}
+			channel <- &replicaData{Val: &store.StoreVal{Val: value.Val, Active: value.Active, Timestamp: value.Timestamp + 1}, Err: nil}
 		} else {
-			if cmd == api.CmdPut {
-				log.D.Println("Record not found. Initiating timestamp")
-				channel <- &replicaData{Val: &store.StoreVal{Val: make([]byte, 0, 0), Active: true, Timestamp: 0}, Err: nil}
-			} else {
-
-				channel <- &replicaData{Val: &store.StoreVal{Val: make([]byte, 0, 0), Active: false, Timestamp: 0}, Err: nil}
-			}
+			channel <- &replicaData{Val: &store.StoreVal{Val: make([]byte, 0, 0), Active: false, Timestamp: 0}, Err: nil}
 		}
 	default:
 		channel <- &replicaData{Val: nil, Err: errors.New(fmt.Sprintf("Unknown command received\n"))}
@@ -324,7 +298,7 @@ func channeledLocalCommand(channel chan *replicaData, cmd byte, msg api.Message,
 }
 
 func channeledRemoteCommand(channel chan *replicaData, cmd byte, handler *MessageHandler,
-	remotePeerKey store.Key, msg api.Message) {
+	remotePeerKey store.Key, msg api.Message, timestamp int) {
 	thisNode := node.GetProcessNode()
 	peer := thisNode.KnownPeers[remotePeerKey]
 	var storeVal *store.StoreVal
@@ -333,9 +307,9 @@ func channeledRemoteCommand(channel chan *replicaData, cmd byte, handler *Messag
 	case api.CmdGet:
 		replyMsg = protocol.IntraNodeGet(peer.Addr.String(), msg)
 	case api.CmdPut:
-		replyMsg = protocol.IntraNodePut(peer.Addr.String(), msg)
+		replyMsg = protocol.IntraNodePut(peer.Addr.String(), msg, timestamp)
 	case api.CmdRemove:
-		replyMsg = protocol.IntraNodeRemove(peer.Addr.String(), msg)
+		replyMsg = protocol.IntraNodeRemove(peer.Addr.String(), msg, timestamp)
 	case api.CmdGetTimestamp:
 		replyMsg = protocol.IntraNodeGetTimestamp(peer.Addr.String(), msg)
 	default:
@@ -371,20 +345,21 @@ func HandleGetTimestamp(handler *MessageHandler, msg api.Message, recvAddr *net.
 	thisNode := node.GetProcessNode()
 	storeVal, err := thisNode.Store.Get(keyMsg.Key)
 	var replyMsg api.Message
-	// If timestamp doesn't exist, return 0
 	if err != nil {
 		log.D.Println("Key not found. Initiating timestamp")
-		valuedata, jsonerr := json.Marshal(&store.StoreVal{Val: make([]byte, 0), Active: true, Timestamp: 0})
+		valuedata, jsonerr := json.Marshal(&store.StoreVal{Val: make([]byte, 0), Active: false, Timestamp: 0})
 		if jsonerr != nil {
 			log.E.Println(jsonerr)
 		}
 		replyMsg = api.NewValueDgram(msg.UID(), api.RespOkTimestamp, valuedata)
 	} else {
-		valuedata, jsonerr := json.Marshal(&store.StoreVal{Val: storeVal.Val, Active: storeVal.Active, Timestamp: storeVal.Timestamp})
+		valuedata, jsonerr := json.Marshal(&store.StoreVal{Val: storeVal.Val, Active: storeVal.Active, Timestamp: storeVal.Timestamp + 1})
 		if jsonerr != nil {
 			log.E.Println(jsonerr)
+			replyMsg = api.NewBaseDgram(msg.UID(), api.RespInternalError)
+		} else {
+			replyMsg = api.NewValueDgram(msg.UID(), api.RespOkTimestamp, valuedata)
 		}
-		replyMsg = api.NewValueDgram(msg.UID(), api.RespOkTimestamp, valuedata)
 	}
 	protocol.ReplyToGetTimestamp(handler.Conn, recvAddr, replyMsg)
 
