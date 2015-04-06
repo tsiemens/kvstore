@@ -1,8 +1,10 @@
 package protocol
 
 import (
+	"encoding/json"
 	"github.com/tsiemens/kvstore/server/store"
 	"github.com/tsiemens/kvstore/shared/api"
+	"github.com/tsiemens/kvstore/shared/log"
 	"net"
 )
 
@@ -18,10 +20,16 @@ func IntraNodeGet(url string, msg api.Message) api.Message {
 	}
 }
 
-func IntraNodePut(url string, msg api.Message) api.Message {
+func IntraNodePut(url string, msg api.Message, timestamp int) api.Message {
 	keyValMsg := msg.(*api.KeyValueDgram)
+	storeVal := &store.StoreVal{Val: keyValMsg.Value, Active: true, Timestamp: timestamp}
+	payload, jsonerr := json.Marshal(storeVal)
+	if jsonerr != nil {
+		log.E.Println(jsonerr)
+		return nil
+	}
 	msg, err := api.SendRecv(url, func(addr *net.UDPAddr) api.Message {
-		return api.NewKeyValueDgram(msg.UID(), api.CmdIntraPut, keyValMsg.Key, keyValMsg.Value)
+		return api.NewKeyValueDgram(msg.UID(), api.CmdIntraPut, keyValMsg.Key, payload)
 	})
 	if err != nil {
 		return nil
@@ -30,10 +38,16 @@ func IntraNodePut(url string, msg api.Message) api.Message {
 	}
 }
 
-func IntraNodeRemove(url string, msg api.Message) api.Message {
+func IntraNodeRemove(url string, msg api.Message, timestamp int) api.Message {
 	keyMsg := msg.(*api.KeyDgram)
+	storeVal := &store.StoreVal{Val: nil, Active: false, Timestamp: timestamp}
+	payload, jsonerr := json.Marshal(storeVal)
+	if jsonerr != nil {
+		log.E.Println(jsonerr)
+		return nil
+	}
 	msg, err := api.SendRecv(url, func(addr *net.UDPAddr) api.Message {
-		return api.NewKeyDgram(msg.UID(), api.CmdIntraRemove, keyMsg.Key)
+		return api.NewKeyValueDgram(msg.UID(), api.CmdIntraRemove, keyMsg.Key, payload)
 	})
 	if err != nil {
 		return nil
