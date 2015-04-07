@@ -225,7 +225,8 @@ func execQuorum(cmd byte, msg api.Message, handler *MessageHandler, timestamp in
 	}
 
 	receivedStoreVals := make([]*store.StoreVal, 0, len(replicaIds))
-	for receivedCount < len(replicaIds) {
+	minOps := minSuccessfulOps(len(replicaIds))
+	for receivedCount < len(replicaIds) && len(receivedStoreVals) < minOps {
 		data := <-respChan
 		if data.Err != nil {
 			log.I.Printf("Failed get from %s: %s", keyString(replicaIds[receivedCount]), data.Err)
@@ -237,7 +238,7 @@ func execQuorum(cmd byte, msg api.Message, handler *MessageHandler, timestamp in
 	}
 
 	// Get the highest timestamp value
-	if len(receivedStoreVals) >= minSuccessfulOps(len(replicaIds)) {
+	if len(receivedStoreVals) >= minOps {
 		var mostUpToDate *store.StoreVal
 		for _, storeVal := range receivedStoreVals {
 			if mostUpToDate == nil {
