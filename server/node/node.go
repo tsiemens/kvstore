@@ -240,7 +240,9 @@ func (n *Node) GetAllKeysForNode(peerKey store.Key,
 
 	nextLowest := n.GetNextLowestPeerKeyFrom(peerKey)
 	// probabalistic size for efficiency
-	keys := make([]store.Key, int(float32(len(sortedStoreKeys))*0.6))
+	//keys := make([]store.Key, int(float32(len(sortedStoreKeys))*0.6))
+	//copy all keys on the next lowest peer
+	keys := make([]store.Key, len(sortedStoreKeys))
 	for _, storeKey := range sortedStoreKeys {
 		if storeKey.Between(nextLowest, peerKey) {
 			keys = append(keys, storeKey)

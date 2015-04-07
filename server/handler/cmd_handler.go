@@ -176,7 +176,7 @@ func IntraDataWrite(handler *MessageHandler, msg api.Message, recvAddr *net.UDPA
 	} else {
 		log.I.Printf("Removing value with key %v\n", keyValueMsg.Key)
 		err = thisNode.Store.Remove(keyValueMsg.Key, storeVal.Timestamp)
-		storeVal = &store.StoreVal{Val: make([]byte, 0), Active: true, Timestamp: storeVal.Timestamp}
+		storeVal = &store.StoreVal{Val: make([]byte, 0), Active: false, Timestamp: storeVal.Timestamp}
 	}
 
 	var replyMsg api.Message
