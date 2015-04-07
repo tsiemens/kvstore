@@ -1,14 +1,13 @@
 package loop
 
 import (
+	"github.com/tsiemens/kvstore/server/config"
 	"github.com/tsiemens/kvstore/server/node"
 	"github.com/tsiemens/kvstore/server/protocol"
 	"github.com/tsiemens/kvstore/shared/api"
 	"github.com/tsiemens/kvstore/shared/log"
 	"time"
 )
-
-const MembershipSendFreq = time.Millisecond * 5000
 
 // Starts all default background periodic tasks for the server
 func GoAll() {
@@ -22,6 +21,7 @@ func GoAll() {
 }
 
 func MembershipUpdateLoop() {
+	MembershipSendFreq := config.GetConfig().MembershipFrequency
 	thisNode := node.GetProcessNode()
 	for {
 		randPeer, peerId := thisNode.RandomPeer()

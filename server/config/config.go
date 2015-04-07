@@ -26,6 +26,7 @@ type Config struct {
 	StatusServerHttpPort int
 	UpdateFrequency      time.Duration // how often the status server requests node updates
 	NodeTimeout          time.Duration // how long a dial tried before timing out
+	MembershipFrequency  time.Duration
 	DialTimeout          time.Duration
 	Hostname             string // this servers hostname
 	MaxReplicas          int
