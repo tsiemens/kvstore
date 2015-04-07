@@ -25,6 +25,11 @@ func ReplyToRemove(conn *net.UDPConn, recvAddr *net.UDPAddr, cache *cache.Cache,
 	cache.SendReply(conn, replyMsg, recvAddr)
 }
 
+func ReplyCached(conn *net.UDPConn, recvAddr *net.UDPAddr, cache *cache.Cache,
+	replyMsg api.Message) {
+	cache.SendReply(conn, replyMsg, recvAddr)
+}
+
 func ReplyToGetTimestamp(conn *net.UDPConn, recvAddr *net.UDPAddr, replyMsg api.Message) {
 	log.D.Printf("Sending message type %x to %v\n", replyMsg.Command(), recvAddr.String())
 	conn.WriteTo(replyMsg.Bytes(), recvAddr)

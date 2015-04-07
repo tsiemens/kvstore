@@ -457,6 +457,8 @@ func handleMembership(msg api.Message, recvAddr *net.UDPAddr) {
 }
 
 func HandleShutdown(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
+	replyMsg := api.NewValueDgram(msg.UID(), api.RespOk, make([]byte, 0, 0))
+	protocol.ReplyCached(handler.Conn, recvAddr, handler.Cache, replyMsg)
 	log.I.Fatal("Shutdown Command recieved, aborting program")
 }
 

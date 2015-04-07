@@ -21,6 +21,8 @@ func New(cmdstr string) (cmd Command, err error) {
 		cmd = newPutCommand()
 	case "remove":
 		cmd = newRemoveCommand()
+	case "kill":
+		cmd = newKillCommand()
 	case "status":
 		cmd = newStatusUpdateCommand()
 	case "adhoc":
@@ -145,10 +147,37 @@ func (c *RemoveCommand) Run(url string, args []string) error {
 	return nil
 }
 
+//sdfsdf
+
+type KillCommand struct {
+	BaseCommand
+}
+
+func newKillCommand() *KillCommand {
+	return &KillCommand{BaseCommand{
+		name: "kill",
+		desc: "Kills the node.",
+		args: []string{},
+	}}
+}
+
+func (c *KillCommand) Run(url string, args []string) error {
+	err := clientapi.Kill(url)
+	if err != nil {
+		return err
+	}
+
+	log.Out.Println("Killed node")
+	return nil
+}
+
+//sdfsdf
+
 func PrintCommands() {
 	printCommandHelp(newGetCommand())
 	printCommandHelp(newPutCommand())
 	printCommandHelp(newRemoveCommand())
+	printCommandHelp(newKillCommand())
 	printCommandHelp(newTestCommand())
 }
 
