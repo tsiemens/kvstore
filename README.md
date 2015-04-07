@@ -6,9 +6,13 @@ This distributed service is separated into two components: The node monitoring s
 ## Key Value Store
 
 #### Architecture & Design
-For the first iteration of the key value store, the system was kept simple. Each node can be started on any port from the command line, and will configure itself based on a small configuration file, though this does not do anything meaningful for A3 at this point. The node will wait for incoming messages on the port, and on receiving a datagram, will spawn a new thread to handle the message. The message handler parses the message, based on the command, and returns an appropriate response. Internally, the handling code surrounding this was designed to be as extensible as possible, so that further message commands could be added in the future for inter-node communication.
-
-Additionally, the nodes can currently execute a membership protocol. They use an initial contact point (chose one out of well known host in config file), after which they can contact any node to update their membership. This has no impact on A3, however the implementation of A2 was modified to use this membership list in place of the static list of nodes previously used.
+For the replication component, our system uses a quorum based algorithm. When a node (intermediate node) receives a request
+from a client, it first figures out who the responsible node (primary node) is for that value as well as all the back up nodes. 
+For a PUT or REMOVE command, the intermediate node sends a request to the primary and all the backups requesting their timestamps.
+Following that, a PUT or REMOVE command is sent to the primary and backup nodes containing the highest timestamp + 1. For GET 
+commands, the primary as well as all the backups are queried and the value with the highest timestamp is returned. To make this
+algorithm a quorum algorithm, the amount of responses required to correctly execute a command is K/2 + 1, where K is the number
+of backups. 
 
 #### Additional Response Codes
 * 0x09: The message structure for the command was invalid (eg. mismatched value length, missing data)
