@@ -16,7 +16,6 @@ import (
 )
 
 const timeErr = time.Millisecond * 50
-const TimeTillMemberDrop = time.Minute * 1
 
 // Node represents this machine, as one in a cluster of nodes.
 type Node struct {
@@ -130,6 +129,7 @@ func (node *Node) RandomPeer() (*Peer, *store.Key) {
 
 func (node *Node) CleanupKnownNodes() {
 	now := time.Now()
+	TimeTillMemberDrop := config.GetConfig().NodeTimeout
 	for key, peer := range node.KnownPeers {
 		if peer.LastSeen.Add(TimeTillMemberDrop).Before(now) {
 			log.I.Printf("Peer %s is expired\n", key.String())
