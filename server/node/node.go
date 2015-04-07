@@ -299,6 +299,7 @@ func (n *Node) SetPeerOffline(peerId store.Key) {
 	if peer, ok := node.KnownPeers[peerId]; ok {
 		peer.Online = false
 	}
+	node.UpdateSortedKeys()
 }
 
 /* Returns the peer that should handle the given key.
