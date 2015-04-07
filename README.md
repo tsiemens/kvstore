@@ -12,7 +12,9 @@ For a PUT or REMOVE command, the intermediate node sends a request to the primar
 Following that, a PUT or REMOVE command is sent to the primary and backup nodes containing the highest timestamp + 1. For GET 
 commands, the primary as well as all the backups are queried and the value with the highest timestamp is returned. To make this
 algorithm a quorum algorithm, the amount of responses required to correctly execute a command is K/2 + 1, where K is the number
-of backups. 
+of backups.
+
+When a new node joins the group, the node which is directly adjacent within the keyspace copies all keys it acts as a replica for, and copies them to the new node.
 
 #### Additional Response Codes
 * 0x09: The message structure for the command was invalid (eg. mismatched value length, missing data)
