@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-var initialTimeout = 100
+var initialTimeout = 500
 var retries = 3
 
 var intraNodeTimeout = 50

@@ -268,9 +268,12 @@ func channeledLocalCommand(channel chan *replicaData, cmd byte, msg api.Message,
 		log.I.Printf("Getting value with key %v\n", key)
 		value, err := node.GetProcessNode().Store.Get(key)
 		if err != nil {
-			log.E.Println(err)
+			// Simulate an absent key with no priority
+			// This way, it is a valid response, to differentiate between
+			// a legit error
+			value = &store.StoreVal{Active: false, Timestamp: 0}
 		}
-		channel <- &replicaData{Val: value, Err: err}
+		channel <- &replicaData{Val: value, Err: nil}
 	case api.CmdPut:
 		log.I.Printf("Putting value with key %v\n", key)
 		err := node.GetProcessNode().Store.Put(key, msg.(*api.KeyValueDgram).Value, timestamp)
@@ -280,7 +283,10 @@ func channeledLocalCommand(channel chan *replicaData, cmd byte, msg api.Message,
 		log.I.Printf("Removing value with key %v\n", key)
 		err := node.GetProcessNode().Store.Remove(key, timestamp)
 		if err != nil {
-			channel <- &replicaData{Val: nil, Err: err}
+			// Simulate an absent key with no priority
+			// This way, it is a valid response, to differentiate between
+			// a legit error
+			channel <- &replicaData{Val: &store.StoreVal{Active: false, Timestamp: 0}, Err: nil}
 		} else {
 			value, _ := node.GetProcessNode().Store.Get(key)
 			// we return Active: True to signal to the routing node that the write was successful.
