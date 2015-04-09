@@ -477,3 +477,9 @@ func HandleStorePush(handler *MessageHandler, msg api.Message, recvAddr *net.UDP
 	}
 	protocol.ReplyToStorePush(handler.Conn, recvAddr, handler.Cache, msg)
 }
+
+// Do nothing. Need to avoid unknown command cyles.
+func HandleUnknownCommand(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
+	log.D.Println("Doing nothing")
+	return
+}

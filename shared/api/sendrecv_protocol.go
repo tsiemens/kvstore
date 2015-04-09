@@ -27,6 +27,8 @@ func ResponseError(msg Message) error {
 		return errors.New("System overload")
 	case RespInternalError:
 		return errors.New("Internal KVStore failure")
+	case RespClientInternalError:
+		return errors.New("Internal KVStore failure")
 	case RespUnknownCommand:
 		return errors.New("Unrecognized command")
 	default:

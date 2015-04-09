@@ -17,6 +17,8 @@ import (
 	"github.com/tsiemens/kvstore/shared/util"
 )
 
+const version = "1.0.0"
+
 func main() {
 	log.Init(ioutil.Discard, os.Stdout, os.Stderr)
 
@@ -100,6 +102,7 @@ func getCommandLine() *ServerCommandLine {
 
 func printHelp() {
 	log.Out.Println("Server for the KVStore Key Value Store.\n\n" +
+		"Version: " + version + "\n" +
 		"Usage:\n    server [OPTIONS]\n" +
 		"    eg. $ server -debug\n\n" +
 		"Flags:")

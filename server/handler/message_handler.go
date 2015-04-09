@@ -41,6 +41,7 @@ func NewDefaultCmdHandlerSet() map[byte]CmdHandler {
 		api.CmdMembershipFailure:       HandleMembershipMsg,
 		api.CmdMembershipFailureGossip: HandleMembershipFailureGossip,
 		api.CmdStorePush:               HandleStorePush,
+		api.RespUnknownCommand:         HandleUnknownCommand,
 	}
 }
 

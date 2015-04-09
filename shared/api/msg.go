@@ -16,25 +16,25 @@ const CmdPut = 0x01
 const CmdGet = 0x02
 const CmdRemove = 0x03
 const CmdShutdown = 0x04
-const CmdIntraPut = 0x05
-const CmdIntraGet = 0x06
-const CmdIntraRemove = 0x07
-const CmdGetTimestamp = 0x08
-const CmdStatusUpdate = 0x21
-const CmdAdhocUpdate = 0x22
-const CmdMembership = 0x23
-const CmdMembershipExchange = 0x25
-const CmdMembershipQuery = 0x27
-const CmdMembershipFailure = 0x28
-const CmdMembershipFailureGossip = 0x29
-const CmdStorePush = 0x30
+const CmdIntraPut = 0x22
+const CmdIntraGet = 0x23
+const CmdIntraRemove = 0x24
+const CmdGetTimestamp = 0x25
+const CmdStatusUpdate = 0x26
+const CmdAdhocUpdate = 0x27
+const CmdMembership = 0x28
+const CmdMembershipExchange = 0x29
+const CmdMembershipQuery = 0x30
+const CmdMembershipFailure = 0x31
+const CmdMembershipFailureGossip = 0x32
+const CmdStorePush = 0x33
 
 // Response codes that can be sent back to the client
 const RespOk = 0x00
 const RespInvalidKey = 0x01
 const RespOutOfSpace = 0x02
 const RespSysOverload = 0x03
-const RespInternalError = 0x04
+const RespClientInternalError = 0x04
 const RespUnknownCommand = 0x05
 const RespStatusUpdateFail = 0x06
 const RespStatusUpdateOK = 0x07
@@ -43,6 +43,7 @@ const RespMalformedDatagram = 0x09
 const RespInvalidNode = 0x10
 const RespTimeout = 0x11
 const RespOkTimestamp = 0x12
+const RespInternalError = 0x13
 
 type BaseDgram struct {
 	uid     [16]byte
@@ -182,7 +183,9 @@ func ParseMessage(dgram []byte,
 
 	if parser, ok := parserMap[command]; ok {
 		msg, err := parser(ByteArray16(uid), command, dgram[17:])
+		log.D.Println("Parsing command %x", command)
 		if err != nil {
+			log.E.Println("Error parsing command %x", command)
 			return nil, err,
 				NewBaseDgram(ByteArray16(uid), RespMalformedDatagram)
 		} else {
