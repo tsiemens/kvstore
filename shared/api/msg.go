@@ -16,10 +16,8 @@ const CmdPut = 0x01
 const CmdGet = 0x02
 const CmdRemove = 0x03
 const CmdShutdown = 0x04
-const CmdIntraPut = 0x22
+const CmdIntraWrite = 0x22
 const CmdIntraGet = 0x23
-const CmdIntraRemove = 0x24
-const CmdGetTimestamp = 0x25
 const CmdStatusUpdate = 0x26
 const CmdAdhocUpdate = 0x27
 const CmdMembership = 0x28
@@ -183,9 +181,9 @@ func ParseMessage(dgram []byte,
 
 	if parser, ok := parserMap[command]; ok {
 		msg, err := parser(ByteArray16(uid), command, dgram[17:])
-		log.D.Println("Parsing command %x", command)
+		log.D.Printf("Parsing command %x\n", command)
 		if err != nil {
-			log.E.Println("Error parsing command %x", command)
+			log.E.Printf("Error parsing command %x\n", command)
 			return nil, err,
 				NewBaseDgram(ByteArray16(uid), RespMalformedDatagram)
 		} else {

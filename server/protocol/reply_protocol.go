@@ -15,14 +15,18 @@ func ReplyToGet(conn *net.UDPConn, recvAddr *net.UDPAddr, replyMsg api.Message) 
 	conn.WriteTo(replyMsg.Bytes(), recvAddr)
 }
 
+func ReplyUncached(conn *net.UDPConn, recvAddr *net.UDPAddr, replyMsg api.Message) {
+	conn.WriteTo(replyMsg.Bytes(), recvAddr)
+}
+
 func ReplyToPut(conn *net.UDPConn, recvAddr *net.UDPAddr, cache *cache.Cache,
 	replyMsg api.Message) {
-	cache.SendReply(conn, replyMsg, recvAddr)
+	ReplyCached(conn, recvAddr, cache, replyMsg)
 }
 
 func ReplyToRemove(conn *net.UDPConn, recvAddr *net.UDPAddr, cache *cache.Cache,
 	replyMsg api.Message) {
-	cache.SendReply(conn, replyMsg, recvAddr)
+	ReplyCached(conn, recvAddr, cache, replyMsg)
 }
 
 func ReplyCached(conn *net.UDPConn, recvAddr *net.UDPAddr, cache *cache.Cache,

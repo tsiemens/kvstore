@@ -272,6 +272,8 @@ func (n *Node) getPredecessorIndexOfNodeAtIndex(index int) int {
 	}
 }
 
+// Returns a list of replica ids in order of succession.
+// ie the node at index 0 is the primary replica
 func (n *Node) GetReplicaIdsForKey(key store.Key) []store.Key {
 	headKeyPtr, _ := n.GetPeerResponsibleForKey(key)
 	var headKeyIndex int
@@ -286,6 +288,25 @@ func (n *Node) GetReplicaIdsForKey(key store.Key) []store.Key {
 	keys = append(keys, *headKeyPtr)
 	nextReplicaIndex := n.getPredecessorIndexOfNodeAtIndex(headKeyIndex)
 	for len(keys) < maxReplicas && n.NodeKeyList[nextReplicaIndex] != *headKeyPtr {
+		keys = append(keys, n.NodeKeyList[nextReplicaIndex])
+		nextReplicaIndex = n.getPredecessorIndexOfNodeAtIndex(nextReplicaIndex)
+	}
+	return keys
+}
+
+// Gets every node, in the order of succession after this node
+func (n *Node) GetAllSuccessors(key store.Key) []store.Key {
+	var headKeyIndex int
+	for i, nodeKey := range n.NodeKeyList {
+		if nodeKey == n.ID {
+			headKeyIndex = i
+			break
+		}
+	}
+
+	keys := make([]store.Key, 0, len(n.NodeKeyList))
+	nextReplicaIndex := n.getPredecessorIndexOfNodeAtIndex(headKeyIndex)
+	for len(keys) < len(n.NodeKeyList) && n.NodeKeyList[nextReplicaIndex] != n.ID {
 		keys = append(keys, n.NodeKeyList[nextReplicaIndex])
 		nextReplicaIndex = n.getPredecessorIndexOfNodeAtIndex(nextReplicaIndex)
 	}

@@ -39,39 +39,30 @@ func printReplicaKeyHandleMsg(key [32]byte, thisNode *node.Node) {
 	log.I.Printf(s)
 }
 
-type replicaData struct {
-	Val *store.StoreVal
-	Err error
-}
-
-type replicaVersionData struct {
-	Version int
-	Err     error
-}
-
-func minSuccessfulOps(attempts int) int {
-	return int((float32(attempts) / 2) + 1)
-}
-
 func HandleGet(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
 	keyMsg := msg.(*api.KeyDgram)
-	if keyMsg.Command() == api.CmdGet {
-		keyMsg.Key = convertClientKey(keyMsg.Key)
-	}
-	printReplicaKeyHandleMsg(keyMsg.Key, node.GetProcessNode())
-	storeval := execQuorum(api.CmdGet, keyMsg, handler, -1 /*timestamp not used*/)
+	keyMsg.Key = convertClientKey(keyMsg.Key)
 
-	if storeval != nil {
-		var replyMsg api.Message
-		if !storeval.Active {
-			replyMsg = api.NewBaseDgram(msg.UID(), api.RespInvalidKey)
-		} else {
-			replyMsg = api.NewValueDgram(msg.UID(), api.RespOk, storeval.Val)
-		}
-		protocol.ReplyToGet(handler.Conn, recvAddr, replyMsg)
+	thisNode := node.GetProcessNode()
+	printReplicaKeyHandleMsg(keyMsg.Key, thisNode)
+
+	storeKey := store.Key(keyMsg.Key)
+	storeval, err := getValueFromResponsibleNode(handler, thisNode.GetReplicaIdsForKey(storeKey),
+		&storeKey)
+	if err != nil {
+		log.E.Println(err)
+		storeval = nil
 	}
-	// Otherwise, we didn't get enough data to make a decision.
-	// Force timeout
+
+	var replyMsg api.Message
+	if storeval == nil {
+		replyMsg = api.NewBaseDgram(msg.UID(), api.RespInternalError)
+	} else if !storeval.Active {
+		replyMsg = api.NewBaseDgram(msg.UID(), api.RespInvalidKey)
+	} else {
+		replyMsg = api.NewValueDgram(msg.UID(), api.RespOk, storeval.Val)
+	}
+	protocol.ReplyToGet(handler.Conn, recvAddr, replyMsg)
 }
 
 func HandleIntraGet(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
@@ -98,60 +89,131 @@ func HandleIntraGet(handler *MessageHandler, msg api.Message, recvAddr *net.UDPA
 }
 
 func HandlePut(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
-	keyValMsg := msg.(*api.KeyValueDgram)
-	if keyValMsg.Command() == api.CmdPut {
-		keyValMsg.Key = convertClientKey(keyValMsg.Key)
-	}
-
-	printReplicaKeyHandleMsg(keyValMsg.Key, node.GetProcessNode())
-
-	mostUpToDate := execQuorum(api.CmdGetTimestamp, msg, handler, -1 /*timestamp not used */)
-	if mostUpToDate == nil {
-		// timeout
-		return
-	}
-
-	mostUpToDate = execQuorum(api.CmdPut, msg, handler, mostUpToDate.Timestamp)
-	var replyMsg api.Message
-	if mostUpToDate != nil {
-		replyMsg = api.NewValueDgram(msg.UID(), api.RespOk, make([]byte, 0, 0))
-		protocol.ReplyToPut(handler.Conn, recvAddr, handler.Cache, replyMsg)
-	}
-
-}
-
-func HandleIntraPut(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
-	//this is a wrapper function that calls intraDataWrite
-	IntraDataWrite(handler, msg, recvAddr)
+	handleWrite(handler, msg, recvAddr, true)
 }
 
 func HandleRemove(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
-	keyMsg := msg.(*api.KeyDgram)
-	if keyMsg.Command() == api.CmdRemove {
-		keyMsg.Key = convertClientKey(keyMsg.Key)
-	}
-	printReplicaKeyHandleMsg(keyMsg.Key, node.GetProcessNode())
-	mostUpToDate := execQuorum(api.CmdGetTimestamp, keyMsg, handler, -1 /*timestamp not used */)
-	if !mostUpToDate.Active {
-		replyMsg := api.NewBaseDgram(msg.UID(), api.RespInvalidKey)
-		protocol.ReplyToRemove(handler.Conn, recvAddr, handler.Cache, replyMsg)
-		return
-	}
-
-	mostUpToDate = execQuorum(api.CmdRemove, keyMsg, handler, mostUpToDate.Timestamp)
-	if mostUpToDate != nil {
-		replyMsg := api.NewValueDgram(msg.UID(), api.RespOk, make([]byte, 0, 0))
-		protocol.ReplyToRemove(handler.Conn, recvAddr, handler.Cache, replyMsg)
-	}
+	handleWrite(handler, msg, recvAddr, false)
 }
 
-func HandleIntraRemove(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
-	//this is a wrapper function that calls intraDataWrite
-	IntraDataWrite(handler, msg, recvAddr)
+func handleWrite(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr, active bool) {
+	var key [32]byte
+	var value []byte = make([]byte, 0)
+
+	switch msg.Command() {
+	case api.CmdPut:
+		keyValMsg := msg.(*api.KeyValueDgram)
+		key = convertClientKey(keyValMsg.Key)
+		value = keyValMsg.Value
+	case api.CmdRemove:
+		keyMsg := msg.(*api.KeyDgram)
+		key = convertClientKey(keyMsg.Key)
+	default:
+		replyMsg := api.NewBaseDgram(msg.UID(), api.RespInternalError)
+		protocol.ReplyCached(handler.Conn, recvAddr, handler.Cache, replyMsg)
+	}
+
+	printReplicaKeyHandleMsg(key, node.GetProcessNode())
+
+	storeKey := store.Key(key)
+	respCode := writeValueToResponsibleNode(handler, node.GetProcessNode().GetReplicaIdsForKey(storeKey),
+		&storeKey, value, active)
+
+	// using value dgram, because our client's parser requires ok responses to be in value fmt
+	replyMsg := api.NewValueDgram(msg.UID(), respCode, make([]byte, 0))
+	protocol.ReplyCached(handler.Conn, recvAddr, handler.Cache, replyMsg)
 }
 
-//handle internal writting, called by HandleInternalPut and HandleInternalRemove
-func IntraDataWrite(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
+// Gets the value from the most responsible node (in order).
+// Will return a store value even if the key does not exist. It will be inactive
+// error is non nil if another error occurs
+func getValueFromResponsibleNode(handler *MessageHandler, replicaIds []store.Key,
+	key *store.Key) (*store.StoreVal, error) {
+
+	thisNode := node.GetProcessNode()
+	var storeVal *store.StoreVal
+	var retErr error
+
+	for _, peerId := range replicaIds {
+		if thisNode.ID == peerId {
+			sv, err := thisNode.Store.Get(*key)
+			storeVal = sv
+			if err != nil {
+				// A dummy store value, indicating we don't have it
+				storeVal = &store.StoreVal{Val: make([]byte, 0), Active: false, Timestamp: 0}
+			}
+			retErr = nil
+			break
+		} else {
+			peer := thisNode.KnownPeers[peerId]
+			replyMsg := protocol.IntraNodeGet(peer.Addr.String(), key)
+			if replyMsg != nil {
+				if replyMsg.Command() == api.RespOk {
+					valMsg := replyMsg.(*api.ValueDgram)
+					retErr = json.Unmarshal(valMsg.Value, &storeVal)
+				} else if replyMsg.Command() == api.RespInvalidKey {
+					// Simulate an absent key with no priority
+					// This way, it is a valid response, to differentiate between
+					// a legit error
+					storeVal = &store.StoreVal{Active: false, Timestamp: 0}
+					retErr = nil
+				} else {
+					retErr = errors.New(fmt.Sprintf("Error %d on node %s",
+						replyMsg.Command(), peerId.String()))
+				}
+				break
+			} else { // Timeout occured
+				thisNode.SetPeerOffline(peerId)
+				protocol.InitMembershipGossip(handler.Conn, &peerId, peer)
+				retErr = errors.New(fmt.Sprintf("Timeout on node %s",
+					peerId.String()))
+			}
+		}
+	}
+	return storeVal, retErr
+}
+
+// Writes the value to the responsible node. Returns the appropriate response code for the client
+func writeValueToResponsibleNode(handler *MessageHandler, replicaIds []store.Key,
+	key *store.Key, val []byte, active bool) byte {
+
+	thisNode := node.GetProcessNode()
+
+	for _, peerId := range replicaIds {
+		if thisNode.ID == peerId {
+			timestamp, err := thisNode.Store.WriteInc(*key, val, active)
+			if err != nil {
+				return api.RespInvalidKey
+			} else {
+				// Lazily write to the other replicas
+				storeVal := &store.StoreVal{Val: val, Active: active, Timestamp: timestamp}
+				go writeToMyReplicas(handler, *key, storeVal)
+				return api.RespOk
+			}
+		} else {
+			peer := thisNode.KnownPeers[peerId]
+			replyMsg := protocol.IntraNodeWrite(peer.Addr.String(), key, val, active, 0)
+			if replyMsg != nil {
+				if replyMsg.Command() == api.RespOk {
+					return api.RespOk
+				} else if replyMsg.Command() == api.RespInvalidKey {
+					return api.RespInvalidKey
+				} else {
+					log.E.Printf("Error %d on node %s",
+						replyMsg.Command(), peerId.String())
+					return api.RespInternalError
+				}
+			} else { // Timeout occured
+				thisNode.SetPeerOffline(peerId)
+				protocol.InitMembershipGossip(handler.Conn, &peerId, peer)
+				log.I.Printf("Timeout on node %s", peerId.String())
+			}
+		}
+	}
+	return api.RespInternalError
+}
+
+func HandleIntraWrite(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
 	keyValueMsg := msg.(*api.KeyValueDgram)
 	thisNode := node.GetProcessNode()
 
@@ -161,217 +223,71 @@ func IntraDataWrite(handler *MessageHandler, msg api.Message, recvAddr *net.UDPA
 	if err != nil {
 		log.E.Println(err)
 		replyMsg := api.NewBaseDgram(msg.UID(), api.RespInternalError)
-		if storeVal.Active == true {
-			protocol.ReplyToPut(handler.Conn, recvAddr, handler.Cache, replyMsg)
-		} else {
-			protocol.ReplyToRemove(handler.Conn, recvAddr, handler.Cache, replyMsg)
-		}
+		protocol.ReplyToPut(handler.Conn, recvAddr, handler.Cache, replyMsg)
 		return
 	}
-	putData := storeVal.Active
 
-	if putData == true {
+	if storeVal.Active {
 		log.I.Printf("Putting value with key %v\n", keyValueMsg.Key)
-		err = thisNode.Store.Put(keyValueMsg.Key, storeVal.Val, storeVal.Timestamp)
 	} else {
 		log.I.Printf("Removing value with key %v\n", keyValueMsg.Key)
-		err = thisNode.Store.Remove(keyValueMsg.Key, storeVal.Timestamp)
-		storeVal = &store.StoreVal{Val: make([]byte, 0), Active: false, Timestamp: storeVal.Timestamp}
 	}
 
-	var replyMsg api.Message
-	if err != nil {
-		replyMsg = api.NewBaseDgram(msg.UID(), api.RespInvalidKey)
-		log.D.Println(err)
-	} else {
-		valuedata, jsonerr := json.Marshal(storeVal)
-		if jsonerr != nil {
-			log.E.Println(err)
-			replyMsg = api.NewBaseDgram(msg.UID(), api.RespInternalError)
-			if putData == true {
-				protocol.ReplyToPut(handler.Conn, recvAddr, handler.Cache, replyMsg)
-			} else {
-				protocol.ReplyToRemove(handler.Conn, recvAddr, handler.Cache, replyMsg)
-			}
-			return
+	if storeVal.Timestamp == 0 {
+		// This is the primary node, so we are incrementing the timestamp
+		timestamp, err := thisNode.Store.WriteInc(keyValueMsg.Key, storeVal.Val, storeVal.Active)
+		var replyMsg api.Message
+		if err != nil {
+			replyMsg = api.NewBaseDgram(msg.UID(), api.RespInvalidKey)
+		} else {
+			// Need to use value dgram due to paring logic with ok
+			replyMsg = api.NewValueDgram(msg.UID(), api.RespOk, make([]byte, 0))
+			storeVal.Timestamp = timestamp
+			go writeToMyReplicas(handler, keyValueMsg.Key, storeVal)
 		}
-		replyMsg = api.NewValueDgram(msg.UID(), api.RespOk, valuedata)
-	}
-	if putData == true {
-		protocol.ReplyToPut(handler.Conn, recvAddr, handler.Cache, replyMsg)
+		protocol.ReplyCached(handler.Conn, recvAddr, handler.Cache, replyMsg)
 	} else {
-		protocol.ReplyToRemove(handler.Conn, recvAddr, handler.Cache, replyMsg)
+		// This is just a replica node. Should blindly replicate the data
+		thisNode.Store.WriteIfNewer(keyValueMsg.Key, storeVal.Val, storeVal.Active,
+			storeVal.Timestamp)
+		// Need to use value dgram due to paring logic with ok
+		replyMsg := api.NewValueDgram(msg.UID(), api.RespOk, make([]byte, 0))
+		protocol.ReplyCached(handler.Conn, recvAddr, handler.Cache, replyMsg)
 	}
-
 }
 
-func execQuorum(cmd byte, msg api.Message, handler *MessageHandler, timestamp int) *store.StoreVal {
-	var key store.Key
-	if msg.Command() == api.CmdPut {
-		key = msg.(*api.KeyValueDgram).Key
-	} else {
-		key = msg.(*api.KeyDgram).Key
-	}
+func writeToMyReplicas(handler *MessageHandler, key store.Key, storeVal *store.StoreVal) {
 	thisNode := node.GetProcessNode()
-	replicaIds := thisNode.GetReplicaIdsForKey(key)
-	respChan := make(chan *replicaData, config.GetConfig().MaxReplicas)
-	receivedCount := 0
-	for _, replica := range replicaIds {
-		if replica == thisNode.ID {
-			go channeledLocalCommand(respChan, cmd, msg, timestamp)
-		} else {
-			go channeledRemoteCommand(respChan, cmd, handler, replica, msg, timestamp)
-		}
-	}
+	replicaIds := thisNode.GetAllSuccessors(key)
 
-	receivedStoreVals := make([]*store.StoreVal, 0, len(replicaIds))
-	minOps := minSuccessfulOps(len(replicaIds))
-	for receivedCount < len(replicaIds) && len(receivedStoreVals) < minOps {
-		data := <-respChan
-		if data.Err != nil {
-			log.I.Printf("Failed get from %s: %s", keyString(replicaIds[receivedCount]), data.Err)
-		} else {
-			log.I.Println("Receive successful")
-			receivedStoreVals = append(receivedStoreVals, data.Val)
-		}
-		receivedCount++
-	}
+	neededReplicas := config.GetConfig().MaxReplicas - 1
+	replicas := 0
+	for _, peerId := range replicaIds {
+		if thisNode.ID != peerId {
+			peer := thisNode.KnownPeers[peerId]
+			replyMsg := protocol.IntraNodeWrite(peer.Addr.String(), &key, storeVal.Val,
+				storeVal.Active, storeVal.Timestamp)
+			if replyMsg != nil {
+				if replyMsg.Command() != api.RespOk {
+					log.E.Printf("Error replicating %d on node %s",
+						replyMsg.Command(), peerId.String())
+				}
 
-	// Get the highest timestamp value
-	if len(receivedStoreVals) >= minOps {
-		var mostUpToDate *store.StoreVal
-		for _, storeVal := range receivedStoreVals {
-			if mostUpToDate == nil {
-				mostUpToDate = storeVal
-			} else if storeVal.Timestamp > mostUpToDate.Timestamp {
-				mostUpToDate = storeVal
+				// In case we get some timeouts, which may not come back, we need
+				// to have data replicated on the other machines.
+				// In the event of catastrophic failure, we still need to
+				// replicate the data, even if all the old replicas died.
+				replicas++
+				if replicas >= neededReplicas {
+					break
+				}
+			} else { // Timeout occured
+				thisNode.SetPeerOffline(peerId)
+				protocol.InitMembershipGossip(handler.Conn, &peerId, peer)
+				log.I.Printf("Timeout on node %s", peerId.String())
 			}
 		}
-		return mostUpToDate
-	} else {
-		return nil
 	}
-	// Otherwise, we didn't get enough data to make a decision.
-	// Force timeout
-
-}
-
-func channeledLocalCommand(channel chan *replicaData, cmd byte, msg api.Message, timestamp int) {
-	var key store.Key
-	if msg.Command() == api.CmdPut {
-		key = msg.(*api.KeyValueDgram).Key
-	} else {
-		key = msg.(*api.KeyDgram).Key
-	}
-	switch cmd {
-	case api.CmdGet:
-		log.I.Printf("Getting value with key %v\n", key)
-		value, err := node.GetProcessNode().Store.Get(key)
-		if err != nil {
-			// Simulate an absent key with no priority
-			// This way, it is a valid response, to differentiate between
-			// a legit error
-			value = &store.StoreVal{Active: false, Timestamp: 0}
-		}
-		channel <- &replicaData{Val: value, Err: nil}
-	case api.CmdPut:
-		log.I.Printf("Putting value with key %v\n", key)
-		err := node.GetProcessNode().Store.Put(key, msg.(*api.KeyValueDgram).Value, timestamp)
-		value, _ := node.GetProcessNode().Store.Get(key)
-		channel <- &replicaData{Val: value, Err: err}
-	case api.CmdRemove:
-		log.I.Printf("Removing value with key %v\n", key)
-		err := node.GetProcessNode().Store.Remove(key, timestamp)
-		if err != nil {
-			// Simulate an absent key with no priority
-			// This way, it is a valid response, to differentiate between
-			// a legit error
-			channel <- &replicaData{Val: &store.StoreVal{Active: false, Timestamp: 0}, Err: nil}
-		} else {
-			value, _ := node.GetProcessNode().Store.Get(key)
-			// we return Active: True to signal to the routing node that the write was successful.
-			channel <- &replicaData{Val: &store.StoreVal{Val: value.Val, Active: true, Timestamp: value.Timestamp}, Err: err}
-		}
-	case api.CmdGetTimestamp:
-		log.I.Printf("Getting timestamp for key\n")
-		value, _ := node.GetProcessNode().Store.Get(key)
-		if value != nil {
-			channel <- &replicaData{Val: &store.StoreVal{Val: value.Val, Active: value.Active, Timestamp: value.Timestamp + 1}, Err: nil}
-		} else {
-			channel <- &replicaData{Val: &store.StoreVal{Val: make([]byte, 0, 0), Active: false, Timestamp: 0}, Err: nil}
-		}
-	default:
-		channel <- &replicaData{Val: nil, Err: errors.New(fmt.Sprintf("Unknown command received\n"))}
-	}
-
-}
-
-func channeledRemoteCommand(channel chan *replicaData, cmd byte, handler *MessageHandler,
-	remotePeerKey store.Key, msg api.Message, timestamp int) {
-	thisNode := node.GetProcessNode()
-	peer := thisNode.KnownPeers[remotePeerKey]
-	var storeVal *store.StoreVal
-	var replyMsg api.Message
-	switch cmd {
-	case api.CmdGet:
-		replyMsg = protocol.IntraNodeGet(peer.Addr.String(), msg)
-	case api.CmdPut:
-		replyMsg = protocol.IntraNodePut(peer.Addr.String(), msg, timestamp)
-	case api.CmdRemove:
-		replyMsg = protocol.IntraNodeRemove(peer.Addr.String(), msg, timestamp)
-	case api.CmdGetTimestamp:
-		replyMsg = protocol.IntraNodeGetTimestamp(peer.Addr.String(), msg)
-	default:
-		replyMsg = nil
-	}
-	var retErr error
-	if replyMsg != nil {
-		if replyMsg.Command() == api.RespOk || replyMsg.Command() == api.RespOkTimestamp {
-			valMsg := replyMsg.(*api.ValueDgram)
-			retErr = json.Unmarshal(valMsg.Value, &storeVal)
-		} else if replyMsg.Command() == api.RespInvalidKey {
-			// Simulate an absent key with no priority
-			// This way, it is a valid response, to differentiate between
-			// a legit error
-			storeVal = &store.StoreVal{Active: false, Timestamp: 0}
-			retErr = nil
-		} else {
-			retErr = errors.New(fmt.Sprintf("Error %d on node %s",
-				replyMsg.Command(), remotePeerKey.String()))
-		}
-	} else { // Timeout occured
-		thisNode.SetPeerOffline(remotePeerKey)
-		protocol.InitMembershipGossip(handler.Conn, &remotePeerKey, peer)
-		retErr = errors.New(fmt.Sprintf("Timeout on node %s",
-			remotePeerKey.String()))
-	}
-	channel <- &replicaData{Val: storeVal, Err: retErr}
-
-}
-
-func HandleGetTimestamp(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
-	keyMsg := msg.(*api.KeyDgram)
-	thisNode := node.GetProcessNode()
-	storeVal, err := thisNode.Store.Get(keyMsg.Key)
-	var replyMsg api.Message
-	if err != nil {
-		log.D.Println("Key not found. Initiating timestamp")
-		valuedata, jsonerr := json.Marshal(&store.StoreVal{Val: make([]byte, 0), Active: false, Timestamp: 0})
-		if jsonerr != nil {
-			log.E.Println(jsonerr)
-		}
-		replyMsg = api.NewValueDgram(msg.UID(), api.RespOkTimestamp, valuedata)
-	} else {
-		valuedata, jsonerr := json.Marshal(&store.StoreVal{Val: storeVal.Val, Active: storeVal.Active, Timestamp: storeVal.Timestamp + 1})
-		if jsonerr != nil {
-			log.E.Println(jsonerr)
-			replyMsg = api.NewBaseDgram(msg.UID(), api.RespInternalError)
-		} else {
-			replyMsg = api.NewValueDgram(msg.UID(), api.RespOkTimestamp, valuedata)
-		}
-	}
-	protocol.ReplyToGetTimestamp(handler.Conn, recvAddr, replyMsg)
-
 }
 
 func HandleStatusUpdate(handler *MessageHandler, msg api.Message, recvAddr *net.UDPAddr) {
@@ -473,7 +389,7 @@ func HandleStorePush(handler *MessageHandler, msg api.Message, recvAddr *net.UDP
 	// for now, receiving this message will just cause this node to store all the contents regardless of key range. Key overflow is not an issue now
 	nodeStore := node.GetProcessNode().Store
 	for key, val := range keyVals {
-		nodeStore.PutDirect(key, val)
+		nodeStore.WriteIfNewer(key, val.Val, val.Active, val.Timestamp)
 	}
 	protocol.ReplyToStorePush(handler.Conn, recvAddr, handler.Cache, msg)
 }

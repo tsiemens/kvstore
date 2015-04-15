@@ -62,8 +62,7 @@ func SendRecv(url string, buildMsg MessageBuilder) (Message, error) {
 	// Timeout at [initialTimeout] ms, doubling the timeout after each retry
 	timeout := initialTimeout
 	if msgToSend.Command() == CmdIntraGet ||
-		msgToSend.Command() == CmdIntraPut ||
-		msgToSend.Command() == CmdIntraRemove {
+		msgToSend.Command() == CmdIntraWrite {
 		timeout = intraNodeTimeout
 	}
 

@@ -2,6 +2,7 @@ package store
 
 import (
 	"errors"
+	"github.com/tsiemens/kvstore/shared/log"
 	"github.com/tsiemens/kvstore/shared/util"
 	"sort"
 )
@@ -35,28 +36,31 @@ func (s *Store) Get(key Key) (*StoreVal, error) {
 	return v, nil
 }
 
-func (s *Store) Put(key Key, value []byte, timestamp int) error {
-	v := &StoreVal{Val: value, Active: true, Timestamp: timestamp}
-	s.PutDirect(key, v)
-	return nil
-}
-
-func (s *Store) PutDirect(key Key, value *StoreVal) {
+// Puts this value and increments the timestamp. Returns the new timestamp for the value
+func (s *Store) WriteInc(key Key, value []byte, active bool) (int, error) {
 	s.Lock.Lock()
 	defer s.Lock.Unlock()
-	s.m[key] = value
-}
-
-func (s *Store) Remove(key Key, timestamp int) error {
-	s.Lock.Lock()
-	defer s.Lock.Unlock()
-	if v, ok := s.m[key]; ok {
-		v.Val = make([]byte, 0)
-		v.Active = false
-		v.Timestamp = timestamp
-		return nil
+	lastVal, ok := s.m[key]
+	v := &StoreVal{Val: value, Active: active}
+	if ok {
+		v.Timestamp = lastVal.Timestamp + 1
+	} else if active {
+		v.Timestamp = 1
 	} else {
-		return errors.New("No value for " + key.String())
+		return 0, errors.New("No value for " + key.String())
+	}
+	s.m[key] = v
+	return v.Timestamp, nil
+}
+
+func (s *Store) WriteIfNewer(key Key, value []byte, active bool, timestamp int) {
+	s.Lock.Lock()
+	defer s.Lock.Unlock()
+	lastVal, ok := s.m[key]
+	if ok && lastVal.Timestamp > timestamp {
+		log.E.Printf("Tried to put lower timestamp for %s\n", key.String())
+	} else {
+		s.m[key] = &StoreVal{Val: value, Active: active, Timestamp: timestamp}
 	}
 }
 
