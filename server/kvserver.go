@@ -17,7 +17,7 @@ import (
 	"github.com/tsiemens/kvstore/shared/util"
 )
 
-const version = "1.0.0"
+const version = "1.1.0"
 
 func main() {
 	log.Init(ioutil.Discard, os.Stdout, os.Stderr)
