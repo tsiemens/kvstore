@@ -205,8 +205,8 @@ func writeValueToResponsibleNode(handler *MessageHandler, replicaIds []store.Key
 				}
 			} else { // Timeout occured
 				thisNode.SetPeerOffline(peerId)
-				protocol.InitMembershipGossip(handler.Conn, &peerId, peer)
 				log.I.Printf("Timeout on node %s", peerId.String())
+				protocol.InitMembershipGossip(handler.Conn, &peerId, peer)
 			}
 		}
 	}

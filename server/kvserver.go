@@ -78,7 +78,7 @@ func getCommandLine() *ServerCommandLine {
 	hPtr := flag.Bool("h", false, "Show help text")
 	helpPtr := flag.Bool("help", false, "Show help text")
 	loopbackPtr := flag.Bool("loopback", false, "Host the server on localhost")
-	portPtr := flag.Int("port", 5555, "Port to run server on.")
+	portPtr := flag.Int("port", 7700, "Port to run server on.")
 	packetLossPtr := flag.Int("lossy", 0, "This percent of packets will be randomly dropped.")
 	configPathPtr := flag.String("config", "config.json", "Path to the config file")
 

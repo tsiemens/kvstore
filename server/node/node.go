@@ -264,6 +264,14 @@ func (n *Node) GetNextLowestPeerKeyFrom(key store.Key) store.Key {
 	return key
 }
 
+func (n *Node) getSuccessorIndexOfNodeAtIndex(index int) int {
+	if index == len(n.NodeKeyList)-1 {
+		return 0
+	} else {
+		return index + 1
+	}
+}
+
 func (n *Node) getPredecessorIndexOfNodeAtIndex(index int) int {
 	if index == 0 {
 		return len(n.NodeKeyList) - 1
@@ -286,10 +294,10 @@ func (n *Node) GetReplicaIdsForKey(key store.Key) []store.Key {
 	maxReplicas := config.GetConfig().MaxReplicas
 	keys := make([]store.Key, 0, maxReplicas)
 	keys = append(keys, *headKeyPtr)
-	nextReplicaIndex := n.getPredecessorIndexOfNodeAtIndex(headKeyIndex)
+	nextReplicaIndex := n.getSuccessorIndexOfNodeAtIndex(headKeyIndex)
 	for len(keys) < maxReplicas && n.NodeKeyList[nextReplicaIndex] != *headKeyPtr {
 		keys = append(keys, n.NodeKeyList[nextReplicaIndex])
-		nextReplicaIndex = n.getPredecessorIndexOfNodeAtIndex(nextReplicaIndex)
+		nextReplicaIndex = n.getSuccessorIndexOfNodeAtIndex(nextReplicaIndex)
 	}
 	return keys
 }
@@ -305,10 +313,10 @@ func (n *Node) GetAllSuccessors(key store.Key) []store.Key {
 	}
 
 	keys := make([]store.Key, 0, len(n.NodeKeyList))
-	nextReplicaIndex := n.getPredecessorIndexOfNodeAtIndex(headKeyIndex)
+	nextReplicaIndex := n.getSuccessorIndexOfNodeAtIndex(headKeyIndex)
 	for len(keys) < len(n.NodeKeyList) && n.NodeKeyList[nextReplicaIndex] != n.ID {
 		keys = append(keys, n.NodeKeyList[nextReplicaIndex])
-		nextReplicaIndex = n.getPredecessorIndexOfNodeAtIndex(nextReplicaIndex)
+		nextReplicaIndex = n.getSuccessorIndexOfNodeAtIndex(nextReplicaIndex)
 	}
 	return keys
 }
