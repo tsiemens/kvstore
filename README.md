@@ -5,14 +5,23 @@ This distributed service is separated into two components: The node monitoring s
 
 ## Key Value Store
 
-#### Architecture & Design
-For the replication component, our system uses a quorum based algorithm. When a node (intermediate node) receives a request
-from a client, it first figures out who the responsible node (primary node) is for that value as well as all the back up nodes. 
-For a PUT or REMOVE command, the intermediate node sends a request to the primary and all the backups requesting their timestamps.
-Following that, a PUT or REMOVE command is sent to the primary and backup nodes containing the highest timestamp + 1. For GET 
-commands, the primary as well as all the backups are queried and the value with the highest timestamp is returned. To make this
-algorithm a quorum algorithm, the amount of responses required to correctly execute a command is K/2 + 1, where K is the number
-of backups.
+#### Architecture & Design (Changes for A6)
+
+For A6, we have changed the replication method from that being used for A5. This was previously using a quarum style,
+however, it became clear that the number of threads being spawned per request was far too large for low performace nodes,
+as well as during even medium load.
+
+The model was redesigned to use a primary replica node per key, which is responsible for replication to its next 2 successors.
+On any request, the intermediate node will request from the node responsible for the key, which should immediately respond with
+the value for a GET, or an OK for a PUT, once it has been stored locally. The responsible node will then duplicate the value
+to its next two successors for eventual consistency.
+
+These improvements greatly reduce the load per request, and limit the number of actions which must be performed before responding
+to the client.
+
+Logical timestamps are still used per key, to help reduce data loss in the event of temporary unavailability, as the system does
+not yet fully support temporarily unavailable nodes. The timestamps also help avoid the potential conflicts of rapid modificaitons
+to the same keys.
 
 When a new node joins the group, the node which is directly adjacent within the keyspace copies all keys it acts as a replica for, and copies them to the new node.
 
